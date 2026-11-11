@@ -8,3 +8,4 @@ data/
 # real transcripts must never land in the repo; only invented fixtures are allowed
 *.jsonl
 !tests/fixtures/*.jsonl
+eval/private/
