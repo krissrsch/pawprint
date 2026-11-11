@@ -1,0 +1,19 @@
+[project]
+name = "pawprint"
+version = "0.1.0"
+description = "Ask your own Claude Code history"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+pawprint = "pawprint.cli:main"
+
+[tool.setuptools]
+packages = ["pawprint"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

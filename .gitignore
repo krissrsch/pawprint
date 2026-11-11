@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+*.db
+*.sqlite
+data/
+# real transcripts must never land in the repo; only invented fixtures are allowed
+*.jsonl
+!tests/fixtures/*.jsonl
