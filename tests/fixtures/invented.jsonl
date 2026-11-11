@@ -1,0 +1,12 @@
+{"type":"mode","mode":"normal","sessionId":"s1"}
+{"type":"user","isMeta":true,"message":{"role":"user","content":"meta noise"},"sessionId":"s1","cwd":"C:\\Work\\demo-app","timestamp":"2026-01-01T10:00:00Z"}
+{"type":"user","message":{"role":"user","content":"How do I fix the login redirect?"},"sessionId":"s1","cwd":"C:\\Work\\demo-app","gitBranch":"main","timestamp":"2026-01-01T10:00:01Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"hmm"}]},"sessionId":"s1","timestamp":"2026-01-01T10:00:02Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Set the redirect URL in auth.py."},{"type":"tool_use","name":"Read","input":{}}]},"sessionId":"s1","timestamp":"2026-01-01T10:00:03Z"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"HUGE TOOL OUTPUT"}]},"sessionId":"s1","timestamp":"2026-01-01T10:00:04Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done, it works now."}]},"sessionId":"s1","timestamp":"2026-01-01T10:00:05Z"}
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"<system-reminder>ignore me</system-reminder>Thanks, and the API_KEY=abcd1234efgh5678 is in .env"}]},"sessionId":"s1","cwd":"C:\\Work\\demo-app","timestamp":"2026-01-01T10:01:00Z"}
+this line is not json
+{"type":"brand-new-kind","x":1}
+{"type":"ai-title","aiTitle":"Fix login redirect","sessionId":"s1"}
+{"type":"user","message":{"role":"user","content":"<command-message>dev</command-message>\n<command-name>/dev</command-name>\n<command-args>continue with the demo</command-args>"},"sessionId":"s1","cwd":"C:\\Work\\demo-app","timestamp":"2026-01-01T11:00:00Z"}
