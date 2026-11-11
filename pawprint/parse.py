@@ -127,9 +127,12 @@ def parse_lines(lines: Iterator[str], stats: ParseStats | None = None) -> list[T
     return turns
 
 
-def parse_file(path: str | Path, stats: ParseStats | None = None) -> list[Turn]:
+def longpath(path: str | Path) -> str:
+    """Windows long-path prefix; session folders can exceed 260 characters."""
     p = str(Path(path).resolve())
-    if len(p) > 240 and p[1:2] == ":":
-        p = chr(92) * 2 + "?" + chr(92) + p  # Windows long-path prefix; session folders can exceed 260 chars
-    with open(p, encoding="utf-8", errors="replace") as f:
+    return chr(92) * 2 + "?" + chr(92) + p if len(p) > 240 and p[1:2] == ":" else p
+
+
+def parse_file(path: str | Path, stats: ParseStats | None = None) -> list[Turn]:
+    with open(longpath(path), encoding="utf-8", errors="replace") as f:
         return parse_lines(f, stats)
