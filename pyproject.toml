@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Ask your own Claude Code history"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-dependencies = []
+dependencies = ["fastembed>=0.7", "numpy"]
 
 [project.optional-dependencies]
 dev = ["pytest"]
