@@ -25,6 +25,7 @@
   #answer { margin-top:16px; padding:14px 18px; border-left:3px solid var(--accent); background:var(--card); border-radius:0 12px 12px 0; white-space:pre-wrap; }
   #answer a { color:var(--blue); font-weight:600; text-decoration:none; }
   #answer a:hover { text-decoration:underline; }
+  #answer code { padding:1px 5px; border-radius:5px; background:var(--raised); font:13px Consolas, monospace; }
   .hit { margin-top:12px; border:1px solid var(--line); border-radius:12px; background:var(--card); }
   .hit.flash { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent); }
   .hit > summary { padding:10px 14px; cursor:pointer; list-style-position:outside; }
@@ -94,8 +95,11 @@ function renderHits(hits) {
 
 function renderAnswer(text) {
   const a = $("answer"); a.replaceChildren(); a.hidden = false;
-  text.split(/(\[Quelle \d+\])/).forEach(part => {
+  // only **bold**, `code` and [Quelle n] are turned into elements; everything else stays plain text
+  text.split(/(\[Quelle \d+\]|\*\*[^*\n]+\*\*|`[^`\n]+`)/).forEach(part => {
     const m = part.match(/^\[Quelle (\d+)\]$/);
+    if (/^\*\*[^*\n]+\*\*$/.test(part)) { const b = document.createElement("strong"); b.textContent = part.slice(2, -2); a.append(b); return; }
+    if (/^`[^`\n]+`$/.test(part)) { const c = document.createElement("code"); c.textContent = part.slice(1, -1); a.append(c); return; }
     if (!m) { a.append(part); return; }
     const l = document.createElement("a"); l.href = "#src" + m[1]; l.textContent = part;
     l.addEventListener("click", e => {
