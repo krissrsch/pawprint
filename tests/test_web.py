@@ -113,7 +113,7 @@ def test_serve_updates_the_index_first_and_survives_a_failing_index(monkeypatch,
     calls = []
     monkeypatch.setitem(sys.modules, "uvicorn", types.SimpleNamespace(run=lambda app, **kw: calls.append(("run", kw["port"]))))
     monkeypatch.setattr(I, "index", lambda store, root, model, log=None: calls.append(("index", root)) or {"changed": 2, "files": 5, "embedded": 7})
-    monkeypatch.setenv("PAWPRINT_TOKEN", "fixed-token")
+    monkeypatch.setenv("PAWPRINT_TOKEN", "fixed-token-0123456")
     W.serve(Store(":memory:"), port=1234, root=tmp_path)
     assert calls == [("index", tmp_path), ("run", 1234)]
     out = capsys.readouterr().out
@@ -164,3 +164,11 @@ def test_same_question_is_answered_from_the_saved_answer_until_the_index_changes
     store.replace_file("a", 2, 2.0, [chunk("login redirect fix, neu", "alpha", "2026-10-01", "s-a")])
     c.get("/api/ask", params={"q": "login redirect"}, headers=H)
     assert len(asked) == 3
+
+
+def test_serve_refuses_a_short_fixed_token(monkeypatch):
+    import pawprint.web as W
+
+    monkeypatch.setenv("PAWPRINT_TOKEN", "short")
+    with pytest.raises(SystemExit):
+        W.serve(Store(":memory:"), port=1237, root=None)

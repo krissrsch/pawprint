@@ -161,6 +161,8 @@ def serve(store: Store, model: str = DEFAULT_MODEL, port: int = 8765, root: Path
         except Exception as e:  # an old index is still better than no server
             print(f"Warnung: Index konnte nicht aktualisiert werden ({type(e).__name__}: {e}). Es wird der alte Stand benutzt.", flush=True)
     token = os.environ.get("PAWPRINT_TOKEN") or secrets.token_urlsafe(24)
+    if len(token) < 16:
+        raise SystemExit("PAWPRINT_TOKEN ist zu kurz (mindestens 16 Zeichen).")
     print(f"Pawprint läuft auf http://127.0.0.1:{port}/#token={token}", flush=True)
     print("Den Link nur lokal benutzen. Mit Strg+C beenden.", flush=True)
     uvicorn.run(create_app(store, token, model), host="127.0.0.1", port=port, log_level="warning")
