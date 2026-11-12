@@ -93,10 +93,23 @@ def create_app(store: Store, token: str, model: str = DEFAULT_MODEL, answer=ask,
     return app
 
 
-def serve(store: Store, model: str = DEFAULT_MODEL, port: int = 8765) -> None:
+def serve(store: Store, model: str = DEFAULT_MODEL, port: int = 8765, root: Path | None = None) -> None:
+    """root: transcripts folder to bring the index up to date before serving (None skips it).
+    PAWPRINT_TOKEN fixes the token, so a parent process such as Nikki can talk to the server without
+    putting the secret on a command line."""
+    import os
+
     import uvicorn
 
-    token = secrets.token_urlsafe(24)
-    print(f"Pawprint läuft auf http://127.0.0.1:{port}/#token={token}")
-    print("Den Link nur lokal benutzen. Mit Strg+C beenden.")
+    if root is not None:
+        from .indexer import index
+
+        try:
+            r = index(store, root, model, log=lambda *_: None)
+            print(f"Index aktuell: {r['changed']} von {r['files']} Dateien neu gelesen, {r['embedded']} Stücke eingebettet.", flush=True)
+        except Exception as e:  # an old index is still better than no server
+            print(f"Warnung: Index konnte nicht aktualisiert werden ({type(e).__name__}: {e}). Es wird der alte Stand benutzt.", flush=True)
+    token = os.environ.get("PAWPRINT_TOKEN") or secrets.token_urlsafe(24)
+    print(f"Pawprint läuft auf http://127.0.0.1:{port}/#token={token}", flush=True)
+    print("Den Link nur lokal benutzen. Mit Strg+C beenden.", flush=True)
     uvicorn.run(create_app(store, token, model), host="127.0.0.1", port=port, log_level="warning")

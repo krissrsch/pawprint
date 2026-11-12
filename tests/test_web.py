@@ -101,3 +101,29 @@ def test_non_ascii_token_is_401_not_500(store):
 def test_not_found_answer_returns_no_sources(store):
     r = client(store, lambda q, hits: (NOT_FOUND, [])).get("/api/ask", params={"q": "login"}, headers=H).json()
     assert r == {"answer": NOT_FOUND, "sources": []}
+
+
+def test_serve_updates_the_index_first_and_survives_a_failing_index(monkeypatch, capsys, tmp_path):
+    import sys
+    import types
+
+    import pawprint.indexer as I
+    import pawprint.web as W
+
+    calls = []
+    monkeypatch.setitem(sys.modules, "uvicorn", types.SimpleNamespace(run=lambda app, **kw: calls.append(("run", kw["port"]))))
+    monkeypatch.setattr(I, "index", lambda store, root, model, log=None: calls.append(("index", root)) or {"changed": 2, "files": 5, "embedded": 7})
+    monkeypatch.setenv("PAWPRINT_TOKEN", "fixed-token")
+    W.serve(Store(":memory:"), port=1234, root=tmp_path)
+    assert calls == [("index", tmp_path), ("run", 1234)]
+    out = capsys.readouterr().out
+    assert "2 von 5 Dateien" in out and "#token=fixed-token" in out
+
+    calls.clear()
+    monkeypatch.setattr(I, "index", lambda *a, **k: (_ for _ in ()).throw(PermissionError("locked")))
+    W.serve(Store(":memory:"), port=1235, root=tmp_path)
+    assert calls == [("run", 1235)] and "Warnung" in capsys.readouterr().out
+
+    calls.clear()
+    W.serve(Store(":memory:"), port=1236, root=None)  # --no-index
+    assert calls == [("run", 1236)]
