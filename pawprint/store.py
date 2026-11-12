@@ -61,6 +61,15 @@ class Store:
             d.execute("INSERT INTO fts(rowid, text) VALUES(?,?)", (cur.lastrowid, c.text))
         d.execute("INSERT OR REPLACE INTO files VALUES(?,?,?)", (path, size, mtime))
 
+    def known_files(self) -> list[str]:
+        return [r[0] for r in self.db.execute("SELECT path FROM files")]
+
+    def forget(self, path: str) -> None:
+        """Drop a transcript that no longer exists, with its chunks and keyword entries."""
+        self.db.execute("INSERT INTO fts(fts, rowid, text) SELECT 'delete', id, text FROM chunks WHERE file=?", (path,))
+        self.db.execute("DELETE FROM chunks WHERE file=?", (path,))
+        self.db.execute("DELETE FROM files WHERE path=?", (path,))
+
     def unembedded(self) -> list[tuple[int, str]]:
         return self.db.execute("SELECT id, text FROM chunks WHERE emb IS NULL").fetchall()
 
@@ -70,7 +79,8 @@ class Store:
         )
 
     def matrix(self) -> tuple[np.ndarray, np.ndarray]:
-        """(ids, embedding matrix) of all embedded chunks."""
+        """(ids, embedding matrix) of all embedded chunks.
+        shortcut: rebuilt from SQLite on every query (~ms at 4k chunks); cache it on the Store above ~50k chunks."""
         rows = self.db.execute("SELECT id, emb FROM chunks WHERE emb IS NOT NULL").fetchall()
         if not rows:
             return np.zeros(0, dtype=np.int64), np.zeros((0, 0), dtype=np.float32)
