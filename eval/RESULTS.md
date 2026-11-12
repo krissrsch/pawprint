@@ -110,6 +110,20 @@ questions (rewrites made in batches of 40 by `eval/build_rewrites.py`):
 | + keywords | 0.46 | 0.76 | 0.84 | 0.59 | 0.75 |
 | + translation + keywords | 0.46 | 0.77 | 0.85 | 0.59 | 0.86 |
 
+**Which model rewrites the question?** The same 798 rewrites made by Sonnet and by Haiku, same retrieval:
+
+| Rewrites by | hit@1 | hit@5 | hit@10 | MRR | other language @10 |
+|---|---|---|---|---|---|
+| none | 0.35 | 0.66 | 0.75 | 0.49 | 0.52 |
+| Sonnet | 0.47 | 0.77 | 0.85 | 0.59 | 0.86 |
+| Haiku, first prompt | 0.45 | 0.75 | 0.84 | 0.58 | 0.81 |
+| **Haiku, prompt that forbids repeating the question's language** | 0.46 | 0.76 | 0.85 | 0.58 | 0.84 |
+
+The first Haiku prompt sometimes returned an English question unchanged instead of translating it;
+one extra sentence fixed that. A single call takes 2.4 s with Haiku and 4.0 s with Sonnet, and costs
+about 0.02 instead of 0.32 US cents at API prices (the input is ~3,000 tokens either way, mostly
+Claude Code's own system prompt). Haiku rewrites the question by default; the answer stays on Sonnet.
+
 **Neighbouring chunks** for `ask` (send the pieces before and after each hit) were rejected: the
 evidence was in the top 5 for 0.66 of questions and in top 5 plus neighbours for 0.70, with 2.5 times
 the text. Sending the top 8 instead covers 0.72 with less text.

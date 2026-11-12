@@ -69,7 +69,7 @@ flowchart LR
 2. **Chunk and redact.** A question plus its answer becomes one chunk, split at paragraphs above 1,500 characters. API keys, tokens, private keys, passwords in URLs and `KEY=value` secrets are replaced with `[REDACTED]` before anything is stored.
 3. **Index.** Chunks go into SQLite with an FTS5 keyword index. The embedding model reads only about 128 tokens, so each chunk is embedded as overlapping 450-character windows, each with the project and session title in front; a chunk scores by its best window. A file is re-read only when its size or modification time changed, and unchanged text keeps its vector (matched by hash).
 4. **Search.** Keyword search (bm25) and vector search (cosine) each return their top 50; Reciprocal Rank Fusion (k = 10) merges the two rankings. Filters for project and date apply before ranking.
-5. **Ask.** First `claude -p` rewrites the question into the other language (German ↔ English) and into 6 to 10 keywords; the search runs with all three and fuses the six rankings. A multilingual cross-encoder ([jina-reranker-v2-base-multilingual](https://huggingface.co/jinaai/jina-reranker-v2-base-multilingual)) then reads question and passage together and reorders the top 20. Plain `pawprint search` skips both steps to stay instant; `--expand` and `--rerank` switch them on.
+5. **Ask.** First `claude -p` (Haiku, about 2 s) rewrites the question into the other language (German ↔ English) and into 6 to 10 keywords; the search runs with all three and fuses the six rankings. A multilingual cross-encoder ([jina-reranker-v2-base-multilingual](https://huggingface.co/jinaai/jina-reranker-v2-base-multilingual)) then reads question and passage together and reorders the top 20. Plain `pawprint search` skips both steps to stay instant; `--expand` and `--rerank` switch them on.
 6. **Answer.** The top 6 excerpts are redacted again, numbered and sent to `claude -p` with no tools, no settings and no session saved. The prompt tells Claude to answer only from the excerpts, cite them, treat them as data rather than instructions, and say "Nicht gefunden" when they don't contain the answer.
 
 ## How well it finds things
@@ -121,11 +121,12 @@ score them are in `eval/`. Details, model comparison and costs: [eval/RESULTS.md
 | `PAWPRINT_HOME` | `~/.pawprint` | Where the index files are stored |
 | `PAWPRINT_MODEL` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | Embedding model ([fastembed](https://github.com/qdrant/fastembed) name); each model gets its own index file |
 | `PAWPRINT_RERANKER` | `jinaai/jina-reranker-v2-base-multilingual` | Cross-encoder used by `ask` and `--rerank` |
+| `PAWPRINT_EXPAND_MODEL` | `haiku` | Claude model that rewrites the question before the search; the answer itself always uses `sonnet` |
 
 ## Limitations
 
 - The Claude Code transcript format is not documented and may change. The parser is tolerant, but new formats can hide text until it is updated.
-- Plain search is weakest for questions in the other language than the conversation (0.53 in the top 10), because keyword search cannot match across languages. `ask` and `search --expand` fix most of it (0.88) at the cost of one `claude -p` call.
+- Plain search is weakest for questions in the other language than the conversation (0.53 in the top 10), because keyword search cannot match across languages. `ask` and `search --expand` fix most of it (0.88) at the cost of one short `claude -p` call (Haiku).
 - The reranker runs on the CPU and needs about 4 seconds per question; the remaining misses are mostly very specific details deep inside long passages.
 - Vector search is brute force over all windows (about 14,000 for 4,000 chunks). That is fast up to some hundred thousand windows; beyond that it would need a vector index.
 - The web UI labels are German.
