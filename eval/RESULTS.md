@@ -244,3 +244,25 @@ Rule tested: skip the Haiku rewrite when keyword and vector search agree on the 
 Skipping on agreement keeps 0.896 of the quotes against 0.898 always rewriting, but saves only 13 % of the Haiku
 calls, which are about a sixteenth of what an answer costs. Not built. A repeated question is now answered from
 a saved answer instead (cleared whenever the index changes).
+
+## recall in real sessions, after the changes (2026-11-12)
+
+`eval/run_recall_eval.py` now drops questions that make no sense without their chat ("the previous answer", "today";
+one Haiku call per 40 questions, cached) and logs the tools each session calls. 12 questions, judged by Haiku and
+checked by hand:
+
+| run | without recall | with recall |
+|---|---|---|
+| first version (9 questions, before the filter) | 2 | 4 |
+| keywords + centred excerpt + `more` (12 questions) | 6 | 3 |
+| same, rule "recall adds to the file search, it does not replace it" | 6 | 6 |
+
+- Between runs the same questions without recall swing by 2 to 3 answers, so differences of that size are noise.
+- Sessions call recall in only 4 of 12 questions; most of these questions are about current code, where a grep
+  finds the answer first. When a session does call it for something that only lives in a chat, it wins: the attack
+  demo (only answered with recall, after nine greps found nothing), the hub colours (one call instead of four reads),
+  and in the earlier runs the user's wish about where agents keep their data.
+- The risk is stale chats: for a story line that changed twice, recall found the first change and the session
+  reported that version, while the file held a newer one.
+- Several generated questions quote code that has changed since; a correct answer from today's code is graded wrong
+  against the old quote. A fairer test needs recognition questions written by the user.

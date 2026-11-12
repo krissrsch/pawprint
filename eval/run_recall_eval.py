@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import re
 import subprocess
 import sys
 import tempfile
@@ -28,13 +29,35 @@ PROMPT = "{q}\n\nAntworte knapp auf Deutsch (höchstens 3 Sätze). Wenn du es ni
 TOOLS = "Read,Grep,Glob"
 
 
+def standalone(questions: list[str]) -> set[str]:
+    """The questions that make sense without the chat they came from. The generated set has many like "the previous
+    answer" or "today", which no session can answer; they only add noise. One Haiku call per 40, cached."""
+    cache_file = PRIVATE / "standalone.json"
+    cache = json.load(open(cache_file, encoding="utf-8")) if cache_file.exists() else {}
+    todo = [q for q in questions if q not in cache]
+    for i in range(0, len(todo), 40):
+        batch = todo[i : i + 40]
+        listing = "\n".join(f"{k}. {q}" for k, q in enumerate(batch, 1))
+        r = claude(["--model", "haiku", "--tools", ""],
+                   "Welche dieser Fragen sind ohne den damaligen Gesprächsverlauf verständlich, also ohne Bezug auf "
+                   "'die vorige Antwort', 'gerade eben', 'heute', 'dieses/das Vorhaben' ohne Namen o. ä.? Eine Frage an den "
+                   "Nutzer über sein eigenes Projekt ist in Ordnung. Antworte nur mit den Nummern, durch Kommas getrennt.\n\n"
+                   + listing, None)
+        ok = {int(x) for x in re.findall(r"\d+", r.get("result", ""))}
+        cache.update({q: (k in ok) for k, q in enumerate(batch, 1)})
+        json.dump(cache, open(cache_file, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    return {q for q in questions if cache.get(q)}
+
+
 def pick(n: int) -> list[dict]:
     items = [x for x in json.load(open(PRIVATE / "big_set.json", encoding="utf-8"))
              if x["project"] in FOLDERS and x["style"] in ("paraphrase", "vague") and Path(FOLDERS[x["project"]]).is_dir()]
+    keep = standalone([x["q"] for x in items])
+    items = [x for x in items if x["q"] in keep]
     random.Random(7).shuffle(items)
     out, per = [], {}
     for x in items:  # spread over the projects
-        if per.get(x["project"], 0) < max(1, n // 3):
+        if per.get(x["project"], 0) < max(1, n // 2):
             per[x["project"]] = per.get(x["project"], 0) + 1
             out.append(x)
     return out[:n]
@@ -50,15 +73,36 @@ def claude(args: list[str], prompt: str, cwd: str | None, timeout: int = 600) ->
         return {"result": "", "is_error": True, "stderr": p.stderr[-300:]}
 
 
+def session(args: list[str], prompt: str, cwd: str, timeout: int = 900) -> tuple[dict, list[str]]:
+    """Like claude(), but streams events, so the tools the session called can be listed (in order)."""
+    p = subprocess.run(["claude", "-p", "--output-format", "stream-json", "--verbose", "--no-session-persistence", *args],
+                       input=prompt, capture_output=True, cwd=cwd, timeout=timeout, encoding="utf-8", errors="replace")
+    result, tools = {"result": "", "is_error": True, "stderr": p.stderr[-300:]}, []
+    for line in p.stdout.splitlines():
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            continue
+        if ev.get("type") == "result":
+            result = ev
+        elif ev.get("type") == "assistant":
+            for c in (ev.get("message") or {}).get("content") or []:
+                if c.get("type") == "tool_use":
+                    name = c.get("name", "")
+                    inp = c.get("input") or {}
+                    tools.append(name.replace("mcp__pawprint__", "") + (f"(more)" if "more" in inp else ""))
+    return result, tools
+
+
 def run(task: dict, with_recall: bool, empty_mcp: str) -> dict:
     args = ["--model", "sonnet", "--tools", TOOLS, "--max-budget-usd", "1.5"]
     args += ["--allowedTools", "mcp__pawprint__recall"] if with_recall else ["--strict-mcp-config", "--mcp-config", empty_mcp]
-    r = claude(args, PROMPT.format(q=task["q"]), FOLDERS[task["project"]])
+    r, tools = session(args, PROMPT.format(q=task["q"]), FOLDERS[task["project"]])
     u = r.get("usage") or {}
     return {"answer": r.get("result", ""), "error": bool(r.get("is_error")), "cost": r.get("total_cost_usd", 0.0),
             "ms": r.get("duration_ms", 0), "turns": r.get("num_turns", 0),
             "tokens": sum(u.get(k, 0) for k in ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")),
-            "denied": [d.get("tool_name") for d in r.get("permission_denials", [])]}
+            "denied": [d.get("tool_name") for d in r.get("permission_denials", [])], "tools": tools}
 
 
 def judge(task: dict, answer: str) -> bool:
