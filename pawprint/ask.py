@@ -1,6 +1,7 @@
 """Answer a question from the best search hits via `claude -p` (logged-in CLI, no API key)."""
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -25,14 +26,20 @@ class AskError(RuntimeError):
 
 
 def label(n: int, h: dict) -> str:
-    return f"[Quelle {n}] {h['ts'][:10]}, Projekt {h['project'] or '?'}, Sitzung \"{h['title'] or h['session_id'][:8]}\""
+    title = redact(h["title"]) or h["session_id"][:8]
+    return f"[Quelle {n}] {h['ts'][:10]}, Projekt {h['project'] or '?'}, Sitzung \"{title}\""
+
+
+def _data(text: str) -> str:
+    """Excerpt text that cannot close or open the <excerpt> wrapper (old chats may contain the tag)."""
+    return re.sub(r"<(/?)excerpt", r"<\1excerpt_", redact(text), flags=re.I)
 
 
 def build_prompt(question: str, hits: list[dict]) -> str:
     parts = [INSTRUCTIONS.format(nf=NOT_FOUND)]
     for n, h in enumerate(hits, 1):
         # redact again: the index may predate a new redaction rule
-        parts.append(f"{label(n, h)}\n<excerpt>\n{redact(h['text'])}\n</excerpt>")
+        parts.append(f"{label(n, h)}\n<excerpt>\n{_data(h['text'])}\n</excerpt>")
     parts.append(f"Question: {question}")
     return "\n\n".join(parts)
 
