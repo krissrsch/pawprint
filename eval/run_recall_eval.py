@@ -21,13 +21,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PRIVATE = ROOT / "eval" / "private"
-# project name in the index -> folder where that project lives now (chats of moved or deleted projects cannot be a fair baseline)
-FOLDERS = {
-    "Pokemon Rumble EX": "C:/Programmieren/Apps/Pokemon Rumble EX",
-    "Zugtool-Plan": "C:/Programmieren/Websites/Zugtool-Plan",
-    "PhilaWelser": "C:/Programmieren/Websites/PhilaWelser",
-    "AgentOS": "C:/Programmieren/Tools/AgentOS",
-}
+# project name in the index -> folder where that project lives now (chats of moved or deleted projects cannot be a
+# fair baseline). Private, like the questions: {"<project>": "C:/path/to/project", ...}
+FOLDERS = json.loads((PRIVATE / "recall_folders.json").read_text(encoding="utf-8"))
 PROMPT = "{q}\n\nAntworte knapp auf Deutsch (höchstens 3 Sätze). Wenn du es nicht herausfinden kannst, sag das."
 TOOLS = "Read,Grep,Glob"
 
