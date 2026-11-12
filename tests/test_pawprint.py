@@ -111,3 +111,16 @@ def test_every_piece_carries_project_and_title_and_display_text_drops_it():
     assert without_head(chunks[0].text).startswith("User: How do I fix")
     assert without_head("no header here\nsecond line") == "no header here\nsecond line"
     assert without_head("[not | a header") == "[not | a header"
+
+
+def test_redact_keeps_ordinary_words_after_secret_looking_names():
+    for text in ["Save tokens: first, ranged reads", "secret_mew: befriend_species mew", "apiKeySource: none`)", "token: abcdefgh"]:
+        assert redact(text) == text, text
+
+
+def test_redact_still_masks_key_shaped_values_and_all_passwords():
+    assert "aB3dE5gH7jK9mN1pQ3" not in redact("DISCORD_CLIENT_SECRET=aB3dE5gH7jK9mN1pQ3")
+    assert "x7Qz9Lw2" not in redact('"api_key": "x7Qz9Lw2"')
+    assert "correcthorse" not in redact("password: correcthorse")
+    assert "Passwort123" not in redact("Passwort: Passwort123")
+    assert "AbCdEfGhIjKlMnOpQrStUv" not in redact("auth_token=AbCdEfGhIjKlMnOpQrStUv")
