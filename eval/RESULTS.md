@@ -52,14 +52,52 @@ question with the name in it ("Floink level 5") ranks it first. Claude's answer 
 one borderline question (an excerpt that quotes a URL as part of a task, without a checked result)
 flipped between refusing and answering on repeated runs, so it was dropped from the set.
 
+## Big generated test set (798 questions, 2026-11-12)
+
+`eval/build_testset.py` drew 400 chunks from 32 projects (no more than 35 per project, Pawprint's own
+sessions left out) and had `claude -p` write two questions per chunk in four styles: paraphrase,
+vague, the other language, and search-box keywords. Each question carries a verbatim evidence quote
+from its chunk, checked by the script. `eval/run_big_eval.py` counts a hit when a retrieved chunk
+contains that quote, so the set stays valid when chunking changes and duplicated passages count.
+
+This set is much harder than the earlier ones and showed two real problems:
+
+1. **Fusion.** With the usual RRF constant k=60, deep and weak vector ranks pushed good keyword hits
+   out of the top 10: hybrid scored below keyword search alone (hit@10 0.56 vs 0.64).
+2. **Truncation.** MiniLM reads about 128 tokens, so it saw roughly the first third of a 1,500-char
+   chunk. Vector search found the answer in the top 10 for only 34 % of questions, and 31 % for
+   pieces that are not the start of a turn.
+
+Fixes, compared on the same questions (hybrid, hit@1 / hit@5 / hit@10 / MRR):
+
+| Variant | hit@1 | hit@5 | hit@10 | MRR | session@5 |
+|---|---|---|---|---|---|
+| before: one vector per chunk, k=60 | 0.24 | 0.45 | 0.56 | 0.34 | 0.82 |
+| k=10 | 0.29 | 0.59 | 0.69 | 0.42 | 0.88 |
+| **450-char windows (best window counts) + k=10** | **0.35** | **0.66** | **0.75** | **0.49** | **0.89** |
+| multilingual-e5-large, one vector per chunk, k=10 | 0.40 | 0.66 | 0.72 | 0.51 | 0.86 |
+
+Vector search alone went from 0.34 to 0.53 hit@10 with windows, and from 0.38 to 0.57 on questions in
+the other language. e5-large is stronger on same-language questions but weaker across languages
+(0.33), ends up lower overall, and needs 35 minutes and 7 GB RAM to index, so windows with MiniLM
+are the default. The first full index now takes about 3.5 minutes instead of one.
+
+Hybrid hit@10 by question style after the fix: keywords 0.98, paraphrase 0.72, vague 0.77, other
+language 0.53. Of the 199 remaining misses, 116 still return the right session in the top 5 (wrong
+piece of the right conversation); 83 miss the session too, most of them cross-language (36).
+
+The small sets did not get worse: 30 German questions 0.97 (MRR 0.84), 10 hard ones 0.80 (MRR 0.55).
+`ask` on its 11 questions: 7 of 7 answerable correct with citations (the vague question that failed
+before now works), 4 of 4 unanswerable refused.
+
 ## Cost (CPU, first full index)
 
 | Model | Index time | Peak RAM | Query |
 |---|---|---|---|
-| MiniLM-L12 multilingual (384 dim, 0.22 GB) | 64 s | low | 20-140 ms |
+| MiniLM-L12 multilingual (384 dim, 0.22 GB), windows | 200 s | low | ~10 ms (windows cached) |
 | multilingual-e5-large (1024 dim, 2.2 GB) | 2,074 s | ~7 GB | 57-260 ms |
 
-A second index run only reads changed files and embeds new text: about 1 s.
+A second index run only reads changed files and embeds new text: a few seconds.
 
 ## Decision
 

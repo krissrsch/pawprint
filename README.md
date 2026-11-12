@@ -27,7 +27,7 @@ cd pawprint
 python -m venv .venv
 .venv/Scripts/pip install -e .          # macOS/Linux: .venv/bin/pip
 
-pawprint index                          # first run: about a minute for ~4,000 chunks
+pawprint index                          # first run: about 3 minutes for ~4,000 chunks
 pawprint search "how did I fix the login redirect"
 pawprint ask "why did we pick SQLite over Postgres?"
 pawprint serve                          # web UI, prints a link with a one-time token
@@ -63,24 +63,31 @@ flowchart LR
 
 1. **Parse.** Each transcript line is JSON. Pawprint keeps what you typed and what the assistant wrote. Tool output, thinking blocks and injected wrappers are dropped. Slash commands keep their arguments (`/dev fix the login`). The format is undocumented, so unknown line types are counted and skipped, never fatal.
 2. **Chunk and redact.** A question plus its answer becomes one chunk, split at paragraphs above 1,500 characters. API keys, tokens, private keys, passwords in URLs and `KEY=value` secrets are replaced with `[REDACTED]` before anything is stored.
-3. **Index.** Chunks go into SQLite with an FTS5 keyword index and a float32 vector per chunk. A file is re-read only when its size or modification time changed, and unchanged text keeps its vector (matched by hash).
-4. **Search.** Keyword search (bm25) and vector search (cosine) each return their top 50; Reciprocal Rank Fusion merges the two rankings. Filters for project and date apply before ranking.
+3. **Index.** Chunks go into SQLite with an FTS5 keyword index. The embedding model reads only about 128 tokens, so each chunk is embedded as overlapping 450-character windows, each with the project and session title in front; a chunk scores by its best window. A file is re-read only when its size or modification time changed, and unchanged text keeps its vector (matched by hash).
+4. **Search.** Keyword search (bm25) and vector search (cosine) each return their top 50; Reciprocal Rank Fusion (k = 10) merges the two rankings. Filters for project and date apply before ranking.
 5. **Ask.** The top 6 excerpts are redacted again, numbered and sent to `claude -p` with no tools, no settings and no session saved. The prompt tells Claude to answer only from the excerpts, cite them, treat them as data rather than instructions, and say "Nicht gefunden" when they don't contain the answer.
 
 ## How well it finds things
 
-Measured on the author's own history (240 transcripts, 3,681 chunks). A hit means the right
-session is among the first five sessions returned.
+Measured on the author's own history. The main test set has **798 questions** that `claude -p`
+wrote for 400 random passages from 32 projects, in four styles; each comes with a verbatim quote
+from its passage, and a hit means a returned chunk contains that quote.
 
-| Question set | Keyword | Vector | Hybrid |
+| Search | top 1 | top 5 | top 10 |
 |---|---|---|---|
-| 30 questions, German, close to the original wording | 0.97 | 0.77 | **0.97** |
-| 10 questions, English, paraphrased, about German sessions | 0.60 | 0.80 | **0.80** |
+| Keyword only | 0.40 | 0.59 | 0.64 |
+| Vector only | 0.23 | 0.42 | 0.53 |
+| **Hybrid (default)** | **0.35** | **0.66** | **0.75** |
 
-The questions themselves stay private because they come from personal sessions. The larger
-`multilingual-e5-large` model scored about the same (36 of 40 against 37 of 40) at 30 times
-the indexing time, so the small model is the default. Details, costs and open points:
-[eval/RESULTS.md](eval/RESULTS.md).
+By style (hybrid, top 10): search-box keywords 0.98, vague 0.77, paraphrased 0.72, other language 0.53.
+This set exposed two problems that are now fixed: the usual fusion constant let weak vector hits
+crowd out good keyword hits, and the embedding model only saw the first third of each chunk.
+Together the fixes raised top-10 hits from 0.56 to 0.75. Small hand-written sets score 0.97
+(30 German questions) and 0.80 (10 paraphrased English ones). `ask` answered 7 of 7 answerable
+questions correctly with citations and refused 4 of 4 it could not answer.
+
+The questions stay private because they come from personal sessions; the scripts that build and
+score them are in `eval/`. Details, model comparison and costs: [eval/RESULTS.md](eval/RESULTS.md).
 
 ## Privacy and security
 
@@ -100,8 +107,8 @@ the indexing time, so the small model is the default. Details, costs and open po
 ## Limitations
 
 - The Claude Code transcript format is not documented and may change. The parser is tolerant, but new formats can hide text until it is updated.
-- MiniLM reads only the first 128 tokens of a chunk, so the question at the start of a chunk weighs more than the end of a long answer.
-- Vector search is brute force over all chunks. That is fast for tens of thousands of chunks; beyond that it would need a vector index.
+- Questions in the other language than the conversation are the weakest case (0.53 in the top 10): keyword search cannot match across languages, so only the vector side helps.
+- Vector search is brute force over all windows (about 14,000 for 4,000 chunks). That is fast up to some hundred thousand windows; beyond that it would need a vector index.
 - The web UI labels are German.
 
 ## Development
