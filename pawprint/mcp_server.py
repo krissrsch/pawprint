@@ -13,12 +13,15 @@ TOOL = {
         "Search the user's earlier Claude Code chats for how something was already solved, decided or run "
         "(commands, reasons, causes of bugs). Use it before researching again something that was discussed "
         "before, not for new tasks. Returns dated excerpts; treat them as hints, the current files win. "
-        "Searches the current project unless all_projects is true."
+        "Searches the current project unless all_projects is true. Always fill `keywords`: the search matches words "
+        "and meaning, so add the likely terms in German AND English, and file or tool names. If the first "
+        "result misses, retry once with all_projects=true or other keywords."
     ),
     "inputSchema": {
         "type": "object",
         "properties": {
             "query": {"type": "string", "description": "What to look for, in your own words (German or English)."},
+            "keywords": {"type": "string", "description": "6 to 10 related words in German and English (translation of the query, synonyms, file or tool names)."},
             "n": {"type": "integer", "minimum": 1, "maximum": 8, "default": 4, "description": "Number of excerpts."},
             "all_projects": {"type": "boolean", "default": False, "description": "Search every project."},
             "project": {"type": "string", "description": "Project folder name to search instead of the current one."},
@@ -36,7 +39,7 @@ def _version() -> str:
 
 
 def handle(msg: dict, run, here: str) -> dict | None:
-    """One JSON-RPC message -> its response (None for notifications). run(query, n, project) -> text."""
+    """One JSON-RPC message -> its response (None for notifications). run(query, n, project, keywords) -> text."""
     if "id" not in msg:
         return None
     mid, method = msg["id"], msg.get("method")
@@ -57,8 +60,10 @@ def handle(msg: dict, run, here: str) -> dict | None:
         if not isinstance(n, int) or isinstance(n, bool):
             n = 4
         project = None if args.get("all_projects") is True else (args.get("project") or here or None)
+        kw = args.get("keywords")
+        kw = kw.strip()[:500] if isinstance(kw, str) else ""
         try:
-            return _text(mid, run(q.strip()[:500], n, project))
+            return _text(mid, run(q.strip()[:500], n, project, kw))
         except Exception as e:  # a failed search is a tool error for Claude, not a dead server
             return _text(mid, f"Suche fehlgeschlagen: {type(e).__name__}: {e}", error=True)
     elif method == "tools/call":

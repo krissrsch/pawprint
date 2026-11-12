@@ -18,10 +18,13 @@ def _load(name: str):
     return _cache[name]
 
 
-def rerank(query: str, hits: list[dict], name: str = RERANKER) -> list[dict]:
-    """The same hits, best first. Equal scores keep their incoming order."""
+def rerank(query: str, hits: list[dict], name: str = RERANKER, read=None) -> list[dict]:
+    """The same hits, best first, each with its model score in h["score"]. Equal scores keep their incoming order.
+    read(hit) -> the text the model reads (default: the whole chunk); the cost grows with its length."""
     if len(hits) < 2:
         return hits
-    scores = list(_load(name).rerank(query, [h["text"] for h in hits]))
+    scores = [float(s) for s in _load(name).rerank(query, [read(h) if read else h["text"] for h in hits])]
+    for h, s in zip(hits, scores):
+        h["score"] = s
     order = sorted(range(len(hits)), key=lambda i: (-scores[i], i))
     return [hits[i] for i in order]

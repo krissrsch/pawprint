@@ -73,14 +73,15 @@ CANDIDATES = 20  # how many hits the reranker reads; 3.8 s per question on a CPU
 
 
 def smart_search(store: Store, q: str, limit: int = 6, model: str = DEFAULT_MODEL, allowed: set[int] | None = None,
-                 expand_fn=None, rerank_fn=None, lock=None) -> list[dict]:
+                 expand_fn=None, rerank_fn=None, lock=None, extra: list[str] | None = None) -> list[dict]:
     """The full pipeline behind `ask`: Claude adds a translation and keywords, hybrid search fuses all of
     them, a cross-encoder reorders the top candidates. Either step can be switched off with None.
-    lock: held only while the store is read, so the slow steps do not block other requests."""
-    extra = []
+    lock: held only while the store is read, so the slow steps do not block other requests.
+    extra: query variants the caller already has (recall: the keywords the calling Claude wrote)."""
+    extra = list(extra or [])
     if expand_fn:
         ex = expand_fn(q)
-        extra = [ex["alt"], ex["kw"]] if ex else []
+        extra += [ex["alt"], ex["kw"]] if ex else []
     with lock or nullcontext():
         hits = search(store, q, CANDIDATES if rerank_fn else limit, "hybrid", model, allowed=allowed, extra=extra)
     if rerank_fn:

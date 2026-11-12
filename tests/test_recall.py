@@ -10,7 +10,7 @@ import pytest
 import pawprint.search as S
 from pawprint.chunk import Chunk
 from pawprint.mcp_server import TOOL, handle, serve_stdio
-from pawprint.recall import EXCERPT, MAX_CHARS, NOTE, recall
+from pawprint.recall import EXCERPT, MAX_CHARS, NOTE, excerpt, focus_words, recall
 from pawprint.store import Store
 
 
@@ -51,8 +51,8 @@ def test_recall_caps_each_excerpt_and_the_whole_output():
     s.replace_file("a", 1, 1.0, [chunk("login " + "x" * 3000, session=f"s{i}", part=i) for i in range(12)])
     out = recall(s, "login", n=99, project=None, rerank_fn=None)
     assert len(out) <= MAX_CHARS + 60
-    assert out.count("\n[") == 8  # n is clamped to 8
-    assert all(len(line) <= EXCERPT + 2 for line in out.splitlines())
+    assert 6 <= out.count("\n[") <= 8 and "Größengrenze" in out  # n is clamped to 8; the size cap drops the last ones
+    assert all(len(line) <= EXCERPT + 4 for line in out.splitlines())
 
 
 def rpc(method, mid=1, **params):
@@ -62,8 +62,8 @@ def rpc(method, mid=1, **params):
 def test_mcp_handshake_list_and_call():
     calls = []
 
-    def run(q, n, project):
-        calls.append((q, n, project))
+    def run(q, n, project, kw):
+        calls.append((q, n, project, kw))
         return "treffer"
 
     init = handle(rpc("initialize", protocolVersion="2025-06-18", capabilities={}), run, "alpha")
@@ -75,11 +75,11 @@ def test_mcp_handshake_list_and_call():
     assert res["result"] == {"content": [{"type": "text", "text": "treffer"}], "isError": False}
     handle(rpc("tools/call", name="recall", arguments={"query": "x", "n": 2, "all_projects": True}), run, "alpha")
     handle(rpc("tools/call", name="recall", arguments={"query": "x", "project": "beta", "n": "viele"}), run, "alpha")
-    assert calls == [("wie lief der Fix?", 4, "alpha"), ("x", 2, None), ("x", 4, "beta")]
+    assert calls == [("wie lief der Fix?", 4, "alpha", ""), ("x", 2, None, ""), ("x", 4, "beta", "")]
 
 
 def test_mcp_errors_do_not_kill_the_server():
-    def boom(q, n, project):
+    def boom(q, n, project, kw):
         raise RuntimeError("kaputt")
 
     assert handle(rpc("tools/call", name="recall", arguments={}), boom, "a")["result"]["isError"]
@@ -102,3 +102,24 @@ def test_mcp_over_real_stdio_keeps_stdout_clean(tmp_path):
     lines = p.stdout.decode("utf-8").splitlines()
     assert [json.loads(l)["id"] for l in lines] == [1, 2]
     assert "Index ist leer" in json.loads(lines[1])["result"]["content"][0]["text"]
+
+
+def test_excerpt_centres_on_the_words_of_the_question():
+    body = "Einleitung " * 100 + "Der Cookie SameSite wurde auf Lax gesetzt, weil der Redirect sonst riss. " + "Schluss " * 100
+    cut = excerpt("[p | t]\n" + body, focus_words("Warum SameSite Lax beim Redirect?"), 300)
+    assert "SameSite wurde auf Lax" in cut and cut.startswith("… ") and cut.endswith(" …") and len(cut) <= 304
+    assert excerpt("[p | t]\nkurz", ["kurz"], 300) == "kurz"
+    assert excerpt("[p | t]\n" + "x" * 900, [], 300).startswith("x" * 300)  # no match: the start
+
+
+def test_recall_passes_keywords_to_the_search(store):
+    s = Store(":memory:")
+    s.replace_file("a", 1, 1.0, [chunk("User: auth\n\nAssistant: we moved the session cookie to httponly")])
+    assert "httponly" in recall(s, "Warum anders?", project=None, keywords="cookie httponly session", rerank_fn=None)
+
+
+def test_recall_warns_when_the_best_hit_scores_low_but_keeps_the_hits(store):
+    scored = lambda s: lambda q, hits: [h | {"score": s} for h in hits]
+    weak = recall(store, "login", project=None, rerank_fn=scored(-0.5))
+    assert "vermutlich nicht" in weak and "[1]" in weak
+    assert "vermutlich nicht" not in recall(store, "login", project=None, rerank_fn=scored(0.5))
