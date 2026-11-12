@@ -26,6 +26,32 @@ This set flatters keyword search: the questions share many words with the passag
 | multilingual-e5-large | vector | 0.70 | 0.60 |
 | multilingual-e5-large | hybrid | 0.60 | 0.49 |
 
+## After the review fixes and a header on every chunk (2026-11-12, 3,856 chunks)
+
+Every chunk now starts with a `[project | session title]` line, so later pieces of a long turn
+keep their context. The line is stripped again for display and for the prompt sent to Claude.
+Hybrid search with MiniLM, session-level recall@5 (MRR in brackets):
+
+| Question set | Before | After |
+|---|---|---|
+| 30 German questions | 0.97 (0.83) | 0.97 (0.84) |
+| 10 English paraphrased questions | 0.70 (0.53) | 0.80 (0.47) |
+
+Recall improved on the hard set, MRR dropped a little. Ten questions cannot separate those two.
+
+## `ask` end to end (11 questions, `eval/run_ask_eval.py`)
+
+| | Result |
+|---|---|
+| Answerable (7) | 6 correct, all with citations, 1 wrongly refused |
+| Unanswerable (4: cake recipe, capital of Australia, bank balance, a password) | 4 refused, none answered |
+
+The wrongly refused question was vague ("the decrypted Pokémon file"); the passage that holds the
+answer is a heap-offset dump that shares no words with it, and it sits outside the top 6. The same
+question with the name in it ("Floink level 5") ranks it first. Claude's answer is not deterministic:
+one borderline question (an excerpt that quotes a URL as part of a task, without a checked result)
+flipped between refusing and answering on repeated runs, so it was dropped from the set.
+
 ## Cost (CPU, first full index)
 
 | Model | Index time | Peak RAM | Query |
