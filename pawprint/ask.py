@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 
+from .chunk import without_head
 from .redact import redact
 
 TIMEOUT = 180
@@ -32,7 +33,7 @@ def label(n: int, h: dict) -> str:
 
 def _data(text: str) -> str:
     """Excerpt text that cannot close or open the <excerpt> wrapper (old chats may contain the tag)."""
-    return re.sub(r"<(/?)excerpt", r"<\1excerpt_", redact(text), flags=re.I)
+    return re.sub(r"<(/?)excerpt", r"<\1excerpt_", redact(without_head(text)), flags=re.I)  # label() already names project and title
 
 
 def build_prompt(question: str, hits: list[dict]) -> str:

@@ -8,7 +8,7 @@ from collections import Counter
 from pathlib import Path
 
 from .ask import AskError, ask
-from .chunk import chunk_turn
+from .chunk import chunk_turn, without_head
 from .embed import DEFAULT_MODEL
 from .indexer import index
 from .parse import ParseStats, parse_file
@@ -47,7 +47,7 @@ def stats(root: Path) -> None:
 
 def show(hits: list[dict], width: int = 300) -> None:
     for n, h in enumerate(hits, 1):
-        body = " ".join(h["text"].split())[:width]
+        body = " ".join(without_head(h["text"]).split())[:width]
         print(f"[{n}] {h['ts'][:10]}  {h['project']}  '{h['title']}'  ({h['session_id'][:8]})\n    {body}\n")
 
 

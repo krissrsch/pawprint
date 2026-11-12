@@ -9,6 +9,7 @@ from .redact import redact
 
 MAX_CHARS = 1500
 OVERLAP = 150
+MAX_HEAD = 200  # the [project | title] line is cut to this length
 
 
 @dataclass
@@ -46,13 +47,21 @@ def _split(text: str, limit: int) -> list[str]:
     return pieces
 
 
+def without_head(text: str) -> str:
+    """The chunk text without its leading "[project | title]" line, for display."""
+    first, sep, rest = text.partition("\n")
+    return rest if sep and first.startswith("[") and first.endswith("]") and " | " in first else text
+
+
 def chunk_turn(turn: Turn, max_chars: int = MAX_CHARS) -> list[Chunk]:
-    if max_chars <= 2 * OVERLAP:
-        raise ValueError(f"max_chars must be larger than {2 * OVERLAP}")  # smaller limits would loop or drop text
+    if max_chars <= 2 * OVERLAP + MAX_HEAD:
+        raise ValueError(f"max_chars must be larger than {2 * OVERLAP + MAX_HEAD}")  # smaller limits would loop or drop text
     body = f"User: {turn.user}\n\nAssistant: {turn.assistant}" if turn.assistant else f"User: {turn.user}"
     body = redact(body)
     title = redact(turn.title)  # titles are generated from the chat and can quote a secret too
+    # every piece repeats project and title: later pieces of a long turn lose the question that gave them meaning
+    head = (f"[{turn.project} | {title}]"[: MAX_HEAD - 1] + "\n") if (turn.project or title) else ""
     return [
-        Chunk(turn.session_id, turn.project, turn.timestamp, title, turn.sidechain, i, p)
-        for i, p in enumerate(_split(body, max_chars))
+        Chunk(turn.session_id, turn.project, turn.timestamp, title, turn.sidechain, i, head + p)
+        for i, p in enumerate(_split(body, max_chars - len(head)))
     ]

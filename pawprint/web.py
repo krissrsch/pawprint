@@ -10,6 +10,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 from .ask import AskError, ask
+from .chunk import without_head
 from .embed import DEFAULT_MODEL
 from .search import search
 from .store import Store
@@ -49,7 +50,7 @@ def create_app(store: Store, token: str, model: str = DEFAULT_MODEL, answer=ask)
             return search(store, q, n, mode, model, allowed=allowed)
 
     def view(h: dict) -> dict:
-        return {k: h[k] for k in ("project", "title", "session_id", "text")} | {"date": h["ts"][:10]}
+        return {k: h[k] for k in ("project", "title", "session_id")} | {"date": h["ts"][:10], "text": without_head(h["text"])}
 
     @app.get("/")
     def page():

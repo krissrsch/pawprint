@@ -97,3 +97,17 @@ def test_chunk_rejects_tiny_limits_and_redacts_titles():
         chunk_turn(t, max_chars=100)
     t.title = "Rotate API_KEY=abcd1234efgh5678"
     assert "abcd1234efgh5678" not in chunk_turn(t)[0].title
+
+
+def test_every_piece_carries_project_and_title_and_display_text_drops_it():
+    from pawprint.chunk import without_head
+
+    t = parse_file(FIX)[0]
+    t.assistant = "\n\n".join(f"para {i} " + "x" * 400 for i in range(10))
+    chunks = chunk_turn(t)
+    assert len(chunks) > 1
+    assert all(c.text.startswith("[demo-app | Fix login redirect]\n") for c in chunks)
+    assert all(len(c.text) <= 1500 for c in chunks)
+    assert without_head(chunks[0].text).startswith("User: How do I fix")
+    assert without_head("no header here\nsecond line") == "no header here\nsecond line"
+    assert without_head("[not | a header") == "[not | a header"
