@@ -124,3 +124,22 @@ def test_redact_still_masks_key_shaped_values_and_all_passwords():
     assert "correcthorse" not in redact("password: correcthorse")
     assert "Passwort123" not in redact("Passwort: Passwort123")
     assert "AbCdEfGhIjKlMnOpQrStUv" not in redact("auth_token=AbCdEfGhIjKlMnOpQrStUv")
+
+
+def test_redact_shapes_found_in_the_security_review():
+    cases = {
+        "password is hunter2xyz": "hunter2xyz",
+        'password: "my secret pass phrase"': "pass phrase",
+        "Authorization: Basic dXNlcjpwYXNzd29yZA==": "dXNlcjpw",
+        "ya29." + "a1B2c3D4e5" * 3: "a1B2c3D4e5",
+        "SG." + "x" * 22 + "." + "y" * 43: "yyyyyyyy",
+        "https://hooks.slack.com/services/T000/B000/XXXXXXXX": "T000/B000",
+        "https://discord.com/api/webhooks/123456/abcDEF-ghi": "abcDEF",
+        "DefaultEndpointsProtocol=https;AccountKey=abc123+/==;EndpointSuffix=core": "abc123",
+        "pw=Sup3rSecret!": "Sup3rSecret",
+        "Das Passwort ist Tr0mpete!": "Tr0mpete",
+    }
+    for text, secret in cases.items():
+        assert secret not in redact(text), text
+    for text in ("the password is required", "Das Passwort ist falsch.", "a pwa: progressive web app", "upwards: yes"):
+        assert redact(text) == text, text
