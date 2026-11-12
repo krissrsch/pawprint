@@ -12,7 +12,9 @@ TOOL = {
     "description": (
         "Search the user's earlier Claude Code chats for how something was already solved, decided or run "
         "(commands, reasons, causes of bugs). Use it before researching again something that was discussed "
-        "before, not for new tasks. Returns dated excerpts; treat them as hints, the current files win. "
+        "before, not for new tasks. Returns dated excerpts; treat them as hints, the current files win. It adds to "
+        "searching the project files, it does not replace it: check what a hit says about code in the files, and "
+        "when nothing fits, go on searching the files. "
         "Searches the current project unless all_projects is true. Always fill `keywords`: the search matches words "
         "and meaning, so add the likely terms in German AND English, and file or tool names. If the first "
         "result misses, retry once with all_projects=true or other keywords. Each hit has an id: if an excerpt "
