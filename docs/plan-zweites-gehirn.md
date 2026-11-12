@@ -72,6 +72,18 @@ Konkrete.
   Chunk-Art ablegen. Kostet beim Erzeugen Haiku-Tokens, macht Treffer kürzer und treffsicherer.
 - Nur bauen, wenn S3 zeigt, dass rohe Auszüge zu lang oder zu laut sind.
 
+## Ergebnis S3 (12.11.2026)
+`eval/run_recall_eval.py`, 9 Fragen aus dem großen Testsatz, je eine frische `claude -p`-Sitzung (Sonnet, nur
+Lesewerkzeuge) mit und ohne `recall`, von Hand nachgeprüft:
+- Richtig: ohne 2, mit 4. Die beiden zusätzlichen Antworten stehen nur in Chats, nicht in Dateien.
+- Kosten gleich (je ca. 0,05 $), Tokens mit `recall` eher mehr (46.000 statt 36.000), Zeit ca. 11 s mehr.
+- `recall` hat keine Antwort verschlechtert.
+- Fazit: Es spart keine Tokens, macht aber Wissen aus Chats erreichbar, zum gleichen Preis. Die Testfragen
+  sind schwach (4 von 9 ohne Zusammenhang unbeantwortbar); echte Wiedererkennungsaufgaben wären fairer.
+
+Entscheidung offen (Nutzer): `recall` so lassen und S4 (Paw-Reiter günstiger) angehen, oder zuerst `recall`
+verbessern (schneller Reranker, längere Auszüge, Relevanzschwelle). S5 nicht nötig.
+
 ## Datenschutz
 Auszüge sind bereits geschwärzt. Was `recall` liefert, landet im Kontext von Claude und damit bei
 Anthropic, wie der Chat damals auch. Es kommen nur die gefundenen Auszüge mit, nie der ganze Index.
