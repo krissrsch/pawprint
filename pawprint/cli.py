@@ -15,7 +15,7 @@ from .parse import ParseStats, parse_file
 from .expand import expand
 from .rerank import rerank
 from .search import search, smart_search
-from .store import Store, db_path
+from .store import Store, db_path, home
 
 DEFAULT_ROOT = Path.home() / ".claude" / "projects"
 
@@ -53,6 +53,19 @@ def show(hits: list[dict], width: int = 300) -> None:
         print(f"[{n}] {h['ts'][:10]}  {h['project']}  '{h['title']}'  ({h['session_id'][:8]})\n    {body}\n")
 
 
+def remember_exe() -> None:
+    """Leave the launcher's path in ~/.pawprint/pawprint-path.txt, so a program that starts Pawprint (Nikki) finds it
+    without a setting. Only a pawprint.exe next to this Python counts: that is what pip installed."""
+    exe = Path(sys.executable).with_name("pawprint.exe")
+    if not exe.is_file():
+        return
+    try:
+        home().mkdir(parents=True, exist_ok=True)
+        (home() / "pawprint-path.txt").write_text(str(exe), encoding="utf-8")
+    except OSError:
+        pass  # a read-only home only costs the convenience
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="pawprint", description="Ask your own Claude Code history")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -85,9 +98,11 @@ def main() -> None:
     if a.cmd == "stats":
         stats(a.root)
     elif a.cmd == "index":
+        remember_exe()
         t0 = time.time()
         print(index(Store(db_path(a.model)), a.root, a.model, embed=not a.no_embed, reread=a.reread), f"{time.time() - t0:.1f}s")
     elif a.cmd == "serve":
+        remember_exe()
         from .web import serve  # imported late so the other commands start fast
 
         serve(Store(db_path(a.model)), a.model, a.port, None if a.no_index else a.root, a.parent_pid)

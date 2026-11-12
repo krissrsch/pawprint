@@ -72,3 +72,19 @@ def test_reread_applies_new_parsing_but_keeps_vectors_of_unchanged_text(tmp_path
     assert index(s, root, embed=False, log=lambda *_: None)["changed"] == 0
     assert index(s, root, embed=False, log=lambda *_: None, reread=True)["changed"] == 1
     assert s.unembedded() == [] and count(s) == 1
+
+
+def test_remember_exe_leaves_the_launcher_path_for_other_programs(tmp_path, monkeypatch):
+    import sys
+
+    from pawprint import cli
+
+    scripts = tmp_path / "venv" / "Scripts"
+    scripts.mkdir(parents=True)
+    monkeypatch.setenv("PAWPRINT_HOME", str(tmp_path / "home"))
+    monkeypatch.setattr(sys, "executable", str(scripts / "python.exe"))
+    cli.remember_exe()  # no pawprint.exe next to Python: nothing is written
+    assert not (tmp_path / "home" / "pawprint-path.txt").exists()
+    (scripts / "pawprint.exe").write_bytes(b"")
+    cli.remember_exe()
+    assert (tmp_path / "home" / "pawprint-path.txt").read_text(encoding="utf-8") == str(scripts / "pawprint.exe")
