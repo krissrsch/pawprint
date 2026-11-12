@@ -4,16 +4,19 @@ version = "0.1.0"
 description = "Ask your own Claude Code history"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-dependencies = ["fastembed>=0.7", "numpy"]
+dependencies = ["fastembed>=0.7", "numpy", "fastapi", "uvicorn"]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "httpx"]
 
 [project.scripts]
 pawprint = "pawprint.cli:main"
 
 [tool.setuptools]
 packages = ["pawprint"]
+
+[tool.setuptools.package-data]
+pawprint = ["static/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

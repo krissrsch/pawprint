@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pawprint</title>
+<style>
+  :root { --bg:#0e0f12; --card:#17181d; --raised:#1f2027; --line:#2c2e37; --text:#ececf1; --muted:#a3a4b0; --accent:#a9e7bd; --ink:#10261a; --warn:#f5c76b; --blue:#8ab4ff; }
+  @media (prefers-color-scheme: light) { :root { --bg:#f6f6f3; --card:#fff; --raised:#f0f0ec; --line:#dcdce2; --text:#1b1c20; --muted:#5a5c66; --accent:#2f8f57; --ink:#fff; --warn:#a86a00; --blue:#2f62c9; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 80px; }
+  h1 { margin:0; font-size:28px; } h1 span { color:var(--muted); font-weight:400; font-size:16px; }
+  form { margin-top:18px; display:grid; gap:10px; }
+  .row { display:flex; flex-wrap:wrap; gap:10px; }
+  input, select, button { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 12px; }
+  input[type=search] { flex:1 1 320px; }
+  label { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:13px; }
+  button { cursor:pointer; } button:hover { background:var(--raised); }
+  button.primary { background:var(--accent); color:var(--ink); border-color:transparent; font-weight:600; }
+  button:disabled { opacity:.6; cursor:wait; }
+  :focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
+  #status { margin-top:16px; color:var(--muted); min-height:1.6em; }
+  #status.err { color:var(--warn); }
+  #answer { margin-top:16px; padding:14px 18px; border-left:3px solid var(--accent); background:var(--card); border-radius:0 12px 12px 0; white-space:pre-wrap; }
+  #answer a { color:var(--blue); font-weight:600; text-decoration:none; }
+  #answer a:hover { text-decoration:underline; }
+  .hit { margin-top:12px; border:1px solid var(--line); border-radius:12px; background:var(--card); }
+  .hit.flash { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent); }
+  .hit > summary { padding:10px 14px; cursor:pointer; list-style-position:outside; }
+  .hit .n { display:inline-block; min-width:2.2em; color:var(--accent); font-weight:700; }
+  .hit .meta { color:var(--muted); font-size:13px; }
+  .hit .snip { display:block; margin-top:2px; color:var(--muted); }
+  .hit pre { margin:0; padding:12px 14px; border-top:1px solid var(--line); white-space:pre-wrap; word-break:break-word; font:13px/1.55 Consolas, monospace; }
+  h2 { margin:28px 0 0; font-size:15px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Pawprint <span>· Ask your own Claude Code history</span></h1>
+  <form id="f">
+    <div class="row">
+      <input id="q" type="search" placeholder="Frage oder Suchbegriff …" aria-label="Frage oder Suchbegriff" required maxlength="500" autofocus>
+    </div>
+    <div class="row">
+      <select id="project" aria-label="Projekt"><option value="">Alle Projekte</option></select>
+      <label>von <input id="since" type="date"></label>
+      <label>bis <input id="until" type="date"></label>
+      <button type="submit" id="bSearch">Suchen</button>
+      <button type="button" id="bAsk" class="primary">Fragen</button>
+    </div>
+  </form>
+  <div id="status" role="status" aria-live="polite"></div>
+  <div id="answer" hidden></div>
+  <h2 id="hHits" hidden>Fundstellen</h2>
+  <div id="hits"></div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const token = new URLSearchParams(location.hash.slice(1)).get("token") || "";
+history.replaceState(null, "", location.pathname);   // keep the token out of the address bar and history
+
+async function api(path, params) {
+  const url = new URL(path, location.origin);
+  for (const [k, v] of Object.entries(params || {})) if (v) url.searchParams.set(k, v);
+  const r = await fetch(url, { headers: { "X-Pawprint-Token": token } });
+  if (!r.ok) {
+    let msg = r.status === 401 ? "Token fehlt oder falsch. Öffne den Link aus dem Terminal noch einmal." : "Fehler " + r.status;
+    try { const j = await r.json(); if (j.detail && typeof j.detail === "string") msg = j.detail; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+function status(text, err) { $("status").textContent = text; $("status").className = err ? "err" : ""; }
+function filters() { return { project: $("project").value, since: $("since").value, until: $("until").value }; }
+
+function renderHits(hits) {
+  const box = $("hits"); box.replaceChildren();
+  $("hHits").hidden = hits.length === 0;
+  hits.forEach((h, i) => {
+    const d = document.createElement("details"); d.className = "hit"; d.id = "src" + (i + 1);
+    const s = document.createElement("summary");
+    const n = document.createElement("span"); n.className = "n"; n.textContent = "[" + (i + 1) + "]";
+    const meta = document.createElement("span"); meta.className = "meta";
+    meta.textContent = h.date + " · " + (h.project || "?") + " · " + (h.title || h.session_id.slice(0, 8));
+    const snip = document.createElement("span"); snip.className = "snip";
+    snip.textContent = h.text.replace(/\s+/g, " ").slice(0, 200);
+    s.append(n, meta, snip);
+    const pre = document.createElement("pre"); pre.textContent = h.text;
+    d.append(s, pre); box.append(d);
+  });
+}
+
+function renderAnswer(text) {
+  const a = $("answer"); a.replaceChildren(); a.hidden = false;
+  text.split(/(\[Quelle \d+\])/).forEach(part => {
+    const m = part.match(/^\[Quelle (\d+)\]$/);
+    if (!m) { a.append(part); return; }
+    const l = document.createElement("a"); l.href = "#src" + m[1]; l.textContent = part;
+    l.addEventListener("click", e => {
+      e.preventDefault();
+      const t = $("src" + m[1]); if (!t) return;
+      t.open = true; t.scrollIntoView({ behavior: "smooth", block: "center" });
+      t.classList.add("flash"); setTimeout(() => t.classList.remove("flash"), 1600);
+    });
+    a.append(l);
+  });
+}
+
+async function run(kind) {
+  const q = $("q").value.trim(); if (!q) return;
+  $("bSearch").disabled = $("bAsk").disabled = true; $("answer").hidden = true;
+  status(kind === "ask" ? "Claude liest die Fundstellen …" : "Suche …");
+  try {
+    if (kind === "ask") {
+      const r = await api("/api/ask", { q, ...filters() });
+      renderHits(r.sources); renderAnswer(r.answer);
+      status(r.sources.length ? "" : "Nichts gefunden.");
+    } else {
+      const hits = await api("/api/search", { q, ...filters() });
+      renderHits(hits); status(hits.length ? hits.length + " Fundstellen" : "Nichts gefunden.");
+    }
+  } catch (e) { status(e.message, true); }
+  finally { $("bSearch").disabled = $("bAsk").disabled = false; }
+}
+
+$("f").addEventListener("submit", e => { e.preventDefault(); run("search"); });
+$("bAsk").addEventListener("click", () => { if ($("f").reportValidity()) run("ask"); });
+
+api("/api/projects").then(list => {
+  for (const p of list) { const o = document.createElement("option"); o.value = o.textContent = p; $("project").append(o); }
+}).catch(e => status(e.message, true));
+</script>
+</body>
+</html>
