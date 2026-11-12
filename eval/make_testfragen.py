@@ -50,7 +50,8 @@ for it in items:
     per_project[it["project"]] = per_project.get(it["project"], 0) + 1
     picked.append({"kind": STYLE_LABEL[it["style"]], "q": it["q"],
                    "expect": f"In der Quelle steht: „{it['evidence'].strip()}“",
-                   "where": f"{d} · Projekt {p} · Sitzung „{t}“" if t else f"{d} · Projekt {p}"})
+                   "where": f"{d} · Projekt {p} · Sitzung „{t}“" if t else f"{d} · Projekt {p}",
+                   "check": "judge", "evidence": it["evidence"].strip()})
 random.Random(seed).shuffle(picked)
 
 special = [
@@ -74,6 +75,10 @@ special = [
     {"kind": "Zeitgefühl", "q": "Wie lange dauert es, bis die Antwort da ist?  (Beliebige Frage mit „Fragen“)",
      "expect": "Erwartet sind 10 bis 20 Sekunden. Notiere die Zeit; deutlich mehr wäre ein Befund.", "where": "Geschwindigkeit"},
 ]
+CHECKS = {"Sachertorte": "refuse", "Hauptstadt von Australien": "refuse", "Farbe hat mein Auto": "refuse", "Discord-Secret": "nokey",
+          "Application ID": "appid", "Als Letztes": "filter", "Wie lange dauert": "time"}
+for e in special:
+    e["check"] = next(v for k, v in CHECKS.items() if k.lower() in e["q"].lower())
 entries = picked + special
 
 CARDS = []
@@ -146,6 +151,7 @@ refresh();
 out = PAGE.replace("__COUNT__", str(len(entries))).replace("__CARDS__", "\n".join(CARDS))
 target = HERE / "testfragen.html"
 target.write_text(out, encoding="utf-8")
+(HERE / "testfragen.json").write_text(json.dumps(entries, ensure_ascii=False, indent=1), encoding="utf-8")  # for run_testfragen.py
 print(f"{len(picked)} questions from the history + {len(special)} special ones -> {target}")
 by = {}
 for e in picked:
