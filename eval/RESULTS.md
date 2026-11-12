@@ -90,6 +90,52 @@ The small sets did not get worse: 30 German questions 0.97 (MRR 0.84), 10 hard o
 `ask` on its 11 questions: 7 of 7 answerable correct with citations (the vague question that failed
 before now works), 4 of 4 unanswerable refused.
 
+## Query expansion, reranking, neighbours (2026-11-12)
+
+Three ideas aimed at the 199 remaining misses, each measured before it went in.
+
+**Reranker.** A cross-encoder reads question and passage together and reorders the hybrid top 20.
+On 240 questions (60 per style), `jinaai/jina-reranker-v2-base-multilingual`: hit@1 0.33 -> 0.64,
+hit@5 0.65 -> 0.78, MRR 0.47 -> 0.69, at 3.9 s per question on the CPU. `BAAI/bge-reranker-v2-m3-int8`
+scored the same on 40 questions (MRR 0.68 vs 0.69) and was slower, so jina is the default.
+
+**Query expansion.** `claude -p` rewrites the question into the other language and into 6-10
+keywords; each of the three strings adds a keyword and a vector ranking to the fusion. On all 798
+questions (rewrites made in batches of 40 by `eval/build_rewrites.py`):
+
+| Variant | hit@1 | hit@5 | hit@10 | MRR | other language @10 |
+|---|---|---|---|---|---|
+| question only | 0.35 | 0.66 | 0.75 | 0.49 | 0.53 |
+| + translation | 0.42 | 0.65 | 0.77 | 0.53 | 0.76 |
+| + keywords | 0.46 | 0.76 | 0.84 | 0.59 | 0.75 |
+| + translation + keywords | 0.46 | 0.77 | 0.85 | 0.59 | 0.86 |
+
+**Neighbouring chunks** for `ask` (send the pieces before and after each hit) were rejected: the
+evidence was in the top 5 for 0.66 of questions and in top 5 plus neighbours for 0.70, with 2.5 times
+the text. Sending the top 8 instead covers 0.72 with less text.
+
+**Full pipeline** (`eval/run_pipeline_eval.py`, same 240 questions):
+
+| | hit@1 | hit@5 | hit@10 | MRR |
+|---|---|---|---|---|
+| plain hybrid | 0.33 | 0.65 | 0.72 | 0.47 |
+| + translation & keywords | 0.45 | 0.74 | 0.84 | 0.57 |
+| + reranker | 0.72 | 0.88 | 0.89 | 0.79 |
+
+hit@10 by style, plain -> pipeline: keywords 1.00 -> 1.00, paraphrase 0.68 -> 0.83, vague 0.73 -> 0.85,
+other language 0.45 -> 0.88.
+
+**On the 199 questions plain hybrid missed** (`eval/run_pipeline_eval.py failures`): the pipeline
+puts 127 (0.64) into the top 10, 117 into the top 5 and 86 in first place. By style: keywords 1.00,
+other language 0.77, vague 0.52, paraphrase 0.51. Of the 70 that are not even in the expanded
+top 20, half still return the right session in the top 5; a sample shows some ambiguous questions
+(another passage answers them too, for example a different installer build) and mostly very specific
+details inside long passages.
+
+`ask` end to end with the pipeline: 7 of 7 answerable correct with citations, 4 of 4 unanswerable
+refused, 10-21 s per question. `ask` and the web answer button use the pipeline; plain search stays
+instant and offers `--expand` and `--rerank`.
+
 ## Cost (CPU, first full index)
 
 | Model | Index time | Peak RAM | Query |

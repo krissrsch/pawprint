@@ -14,7 +14,7 @@ with the sessions it took the answer from. Search and embeddings run on your mac
 
 - **Finds old decisions and fixes.** "How did I fix the login redirect?" returns the turns where it happened, with date, project and session title.
 - **Searches across languages.** A German question finds an English answer and the other way round (multilingual embeddings).
-- **Answers with sources.** `pawprint ask` sends the best few excerpts to `claude -p` and the answer cites them as `[Quelle n]`. If the excerpts don't cover the question, it says so instead of guessing.
+- **Answers with sources.** `pawprint ask` lets Claude add a translation and keywords to your question, searches with all three, has a reranker pick the best excerpts, and sends them to `claude -p`; the answer cites them as `[Quelle n]`. If the excerpts don't cover the question, it says so instead of guessing.
 - **Stays local.** One SQLite file holds the index. Only the excerpts used for an answer leave your machine, and only when you ask.
 
 ## Quick start
@@ -34,7 +34,8 @@ pawprint serve                          # web UI, prints a link with a one-time 
 ```
 
 The first `index` downloads the embedding model (about 220 MB). Later runs only read
-transcripts that changed and finish in about a second.
+transcripts that changed and finish in seconds. The first `ask` also downloads the reranker
+(about 1.1 GB); an answer then takes 10 to 20 seconds on a CPU.
 
 ### Try it without your own history
 
@@ -54,10 +55,13 @@ flowchart LR
     I --> DB[("SQLite<br/>FTS5 + vectors")]
     E["embed<br/>MiniLM, ONNX, CPU"] --- I
     Q["question"] --> S["search<br/>keyword + vector, RRF"]
+    Q --> X["expand (ask)<br/>claude -p: translation + keywords"]
+    X --> S
     E --- S
     DB --> S
     S --> R["hits with sources"]
-    S --> A["ask<br/>claude -p, top 6 excerpts"]
+    S --> RR["rerank (ask)<br/>cross-encoder, top 20"]
+    RR --> A["answer<br/>claude -p, top 6 excerpts"]
     A --> R
 ```
 
@@ -65,7 +69,8 @@ flowchart LR
 2. **Chunk and redact.** A question plus its answer becomes one chunk, split at paragraphs above 1,500 characters. API keys, tokens, private keys, passwords in URLs and `KEY=value` secrets are replaced with `[REDACTED]` before anything is stored.
 3. **Index.** Chunks go into SQLite with an FTS5 keyword index. The embedding model reads only about 128 tokens, so each chunk is embedded as overlapping 450-character windows, each with the project and session title in front; a chunk scores by its best window. A file is re-read only when its size or modification time changed, and unchanged text keeps its vector (matched by hash).
 4. **Search.** Keyword search (bm25) and vector search (cosine) each return their top 50; Reciprocal Rank Fusion (k = 10) merges the two rankings. Filters for project and date apply before ranking.
-5. **Ask.** The top 6 excerpts are redacted again, numbered and sent to `claude -p` with no tools, no settings and no session saved. The prompt tells Claude to answer only from the excerpts, cite them, treat them as data rather than instructions, and say "Nicht gefunden" when they don't contain the answer.
+5. **Ask.** First `claude -p` rewrites the question into the other language (German ↔ English) and into 6 to 10 keywords; the search runs with all three and fuses the six rankings. A multilingual cross-encoder ([jina-reranker-v2-base-multilingual](https://huggingface.co/jinaai/jina-reranker-v2-base-multilingual)) then reads question and passage together and reorders the top 20. Plain `pawprint search` skips both steps to stay instant; `--expand` and `--rerank` switch them on.
+6. **Answer.** The top 6 excerpts are redacted again, numbered and sent to `claude -p` with no tools, no settings and no session saved. The prompt tells Claude to answer only from the excerpts, cite them, treat them as data rather than instructions, and say "Nicht gefunden" when they don't contain the answer.
 
 ## How well it finds things
 
@@ -82,9 +87,21 @@ from its passage, and a hit means a returned chunk contains that quote.
 By style (hybrid, top 10): search-box keywords 0.98, vague 0.77, paraphrased 0.72, other language 0.53.
 This set exposed two problems that are now fixed: the usual fusion constant let weak vector hits
 crowd out good keyword hits, and the embedding model only saw the first third of each chunk.
-Together the fixes raised top-10 hits from 0.56 to 0.75. Small hand-written sets score 0.97
-(30 German questions) and 0.80 (10 paraphrased English ones). `ask` answered 7 of 7 answerable
-questions correctly with citations and refused 4 of 4 it could not answer.
+Together the fixes raised top-10 hits from 0.56 to 0.75.
+
+The `ask` pipeline adds query expansion and a reranker. On a stratified sample of 240 questions:
+
+| Retrieval for `ask` | top 1 | top 5 | top 10 | MRR |
+|---|---|---|---|---|
+| Plain hybrid | 0.33 | 0.65 | 0.72 | 0.47 |
+| + translation and keywords from Claude | 0.45 | 0.74 | 0.84 | 0.57 |
+| **+ reranker (what `ask` uses)** | **0.72** | **0.88** | **0.89** | **0.79** |
+
+Questions in the other language rise from 0.45 to 0.88 in the top 10. Of the 199 questions plain
+hybrid search did not have in its top 10, the pipeline puts 127 into the top 10 and 86 in first place.
+`ask` answered 7 of 7 answerable questions correctly with citations and refused 4 of 4 it could
+not answer. Small hand-written sets score 0.97 (30 German questions) and 0.80 (10 paraphrased
+English ones) with plain hybrid search.
 
 The questions stay private because they come from personal sessions; the scripts that build and
 score them are in `eval/`. Details, model comparison and costs: [eval/RESULTS.md](eval/RESULTS.md).
@@ -103,11 +120,13 @@ score them are in `eval/`. Details, model comparison and costs: [eval/RESULTS.md
 |---|---|---|
 | `PAWPRINT_HOME` | `~/.pawprint` | Where the index files are stored |
 | `PAWPRINT_MODEL` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | Embedding model ([fastembed](https://github.com/qdrant/fastembed) name); each model gets its own index file |
+| `PAWPRINT_RERANKER` | `jinaai/jina-reranker-v2-base-multilingual` | Cross-encoder used by `ask` and `--rerank` |
 
 ## Limitations
 
 - The Claude Code transcript format is not documented and may change. The parser is tolerant, but new formats can hide text until it is updated.
-- Questions in the other language than the conversation are the weakest case (0.53 in the top 10): keyword search cannot match across languages, so only the vector side helps.
+- Plain search is weakest for questions in the other language than the conversation (0.53 in the top 10), because keyword search cannot match across languages. `ask` and `search --expand` fix most of it (0.88) at the cost of one `claude -p` call.
+- The reranker runs on the CPU and needs about 4 seconds per question; the remaining misses are mostly very specific details deep inside long passages.
 - Vector search is brute force over all windows (about 14,000 for 4,000 chunks). That is fast up to some hundred thousand windows; beyond that it would need a vector index.
 - The web UI labels are German.
 
