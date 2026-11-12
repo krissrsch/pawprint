@@ -28,6 +28,11 @@ def home() -> Path:
     return Path(os.environ.get("PAWPRINT_HOME", Path.home() / ".pawprint"))
 
 
+def models_dir() -> str:
+    """Downloaded models live next to the index, not in the shared temp folder (cleaned up, and world-writable on Linux)."""
+    return str(home() / "models")
+
+
 def db_path(model: str) -> Path:
     """One database per embedding model, so models can be compared side by side."""
     return home() / ("index-" + re.sub(r"[^A-Za-z0-9]+", "-", model).strip("-") + ".db")
@@ -40,8 +45,11 @@ def text_hash(t: str) -> str:
 class Store:
     def __init__(self, path: Path | str):
         if str(path) != ":memory:":
-            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            Path(path).parent.mkdir(mode=0o700, parents=True, exist_ok=True)  # the index holds chat text
         self.db = sqlite3.connect(str(path), check_same_thread=False)  # the web server reads from worker threads
+        if str(path) != ":memory:" and os.name != "nt":  # Windows: the profile folder's ACL already limits it to the user
+            os.chmod(path, 0o600)
+        self.db.execute("PRAGMA secure_delete=ON")  # deleted chunks are overwritten, not left in free pages
         self.db.executescript(SCHEMA)
         self._windows = None
 

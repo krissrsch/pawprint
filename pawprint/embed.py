@@ -14,7 +14,9 @@ def _model(name: str):
     if name not in _cache:
         from fastembed import TextEmbedding  # imported late: slow, and not needed for keyword-only use
 
-        _cache[name] = TextEmbedding(model_name=name)
+        from .store import models_dir
+
+        _cache[name] = TextEmbedding(model_name=name, cache_dir=models_dir())
     return _cache[name]
 
 

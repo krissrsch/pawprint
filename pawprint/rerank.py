@@ -14,7 +14,9 @@ def _load(name: str):
 
         # On CPUs with efficiency cores the default (all logical cores) waits on the slow ones: i7-13700F 20 s -> 10 s with 8.
         threads = os.environ.get("PAWPRINT_THREADS")
-        _cache[name] = TextCrossEncoder(model_name=name, threads=int(threads) if threads else None)
+        from .store import models_dir
+
+        _cache[name] = TextCrossEncoder(model_name=name, threads=int(threads) if threads else None, cache_dir=models_dir())
     return _cache[name]
 
 
