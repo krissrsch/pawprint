@@ -8,7 +8,9 @@ import numpy as np
 from .embed import DEFAULT_MODEL, embed_query
 from .store import Store
 
-RRF_K = 60
+# 10, not the textbook 60: on 798 generated questions k=60 let deep, weak vector ranks push good keyword
+# hits out of the top 10 (hit@10 0.56 -> 0.69 with k=10, see eval/RESULTS.md)
+RRF_K = 10
 
 
 def _fts_query(q: str) -> str:
@@ -25,11 +27,16 @@ def keyword_ids(store: Store, q: str, n: int) -> list[int]:
 
 
 def vector_ids(store: Store, q: str, n: int, model: str = DEFAULT_MODEL) -> list[int]:
-    ids, mat = store.matrix()
-    if not len(ids):
+    qv = embed_query(q, model)
+    owner, mat = store.windows(len(qv))
+    if not len(owner):
         return []
-    top = np.argsort(-(mat @ embed_query(q, model)))[:n]
-    return [int(ids[i]) for i in top]
+    # a chunk scores by its best window (max-sim)
+    chunk_ids, row_to_chunk = np.unique(owner, return_inverse=True)
+    best = np.full(len(chunk_ids), -np.inf, dtype=np.float32)
+    np.maximum.at(best, row_to_chunk, mat @ qv)
+    top = np.argsort(-best)[:n]
+    return [int(chunk_ids[i]) for i in top]
 
 
 def rrf(rankings: list[list[int]], k: int = RRF_K) -> list[int]:
