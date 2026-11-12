@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from pawprint.ask import NOT_FOUND, AskError
 from pawprint.chunk import Chunk
+from pawprint.search import search
 from pawprint.store import Store
 from pawprint.web import create_app
 
@@ -23,7 +24,11 @@ def store():
 
 
 def client(store, answer=lambda q, hits: ("ok [Quelle 1]", ["[Quelle 1] ..."])):
-    return TestClient(create_app(store, TOKEN, answer=answer), base_url="http://127.0.0.1")
+    def retrieve(q, allowed, lock):  # no Claude call and no reranker in unit tests
+        with lock:
+            return search(store, q, 6, "keyword", allowed=allowed)
+
+    return TestClient(create_app(store, TOKEN, answer=answer, retrieve=retrieve), base_url="http://127.0.0.1")
 
 
 def test_token_required(store):

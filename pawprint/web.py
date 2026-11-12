@@ -12,7 +12,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from .ask import AskError, ask
 from .chunk import without_head
 from .embed import DEFAULT_MODEL
-from .search import search
+from .expand import expand
+from .rerank import rerank
+from .search import search, smart_search
 from .store import Store
 
 PAGE = Path(__file__).with_name("static") / "index.html"
@@ -20,7 +22,8 @@ DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
 
 
-def create_app(store: Store, token: str, model: str = DEFAULT_MODEL, answer=ask) -> FastAPI:
+def create_app(store: Store, token: str, model: str = DEFAULT_MODEL, answer=ask, retrieve=None) -> FastAPI:
+    """retrieve(q, allowed, lock) -> hits for questions; default is the full pipeline (translation + keywords + reranker)."""
     app = FastAPI(title="Pawprint", docs_url=None, redoc_url=None, openapi_url=None)
     lock = threading.Lock()  # one sqlite connection is shared by the worker threads
 
@@ -41,13 +44,22 @@ def create_app(store: Store, token: str, model: str = DEFAULT_MODEL, answer=ask)
         if not secrets.compare_digest(sent.encode("utf-8", "surrogateescape"), token.encode()):
             raise HTTPException(401, "missing or wrong token")
 
-    def run_search(q: str, n: int, mode: str, project: str, since: str, until: str) -> list[dict]:
+    def allowed_for(project: str, since: str, until: str):
         for d in (since, until):
             if d and not DATE.match(d):
                 raise HTTPException(422, "dates must look like 2026-11-12")
         with lock:
-            allowed = store.allowed_ids(project or None, since or None, until or None)
+            return store.allowed_ids(project or None, since or None, until or None)
+
+    def run_search(q: str, n: int, mode: str, project: str, since: str, until: str) -> list[dict]:
+        allowed = allowed_for(project, since, until)
+        with lock:
             return search(store, q, n, mode, model, allowed=allowed)
+
+    def deep(q: str, allowed, lock) -> list[dict]:
+        return smart_search(store, q, 6, model, allowed=allowed, expand_fn=expand, rerank_fn=rerank, lock=lock)
+
+    find = retrieve or deep
 
     def view(h: dict) -> dict:
         return {k: h[k] for k in ("project", "title", "session_id")} | {"date": h["ts"][:10], "text": without_head(h["text"])}
@@ -69,7 +81,8 @@ def create_app(store: Store, token: str, model: str = DEFAULT_MODEL, answer=ask)
 
     @app.get("/api/ask", dependencies=[Depends(auth)])
     def api_ask(q: str = Query(min_length=1, max_length=500), project: str = "", since: str = "", until: str = ""):
-        hits = run_search(q, 6, "hybrid", project, since, until)
+        allowed = allowed_for(project, since, until)
+        hits = [] if allowed == set() else find(q, allowed, lock)  # the slow steps run outside the lock
         try:
             text, used = answer(q, hits)
         except AskError as e:

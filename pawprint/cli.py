@@ -12,7 +12,9 @@ from .chunk import chunk_turn, without_head
 from .embed import DEFAULT_MODEL
 from .indexer import index
 from .parse import ParseStats, parse_file
-from .search import search
+from .expand import expand
+from .rerank import rerank
+from .search import search, smart_search
 from .store import Store, db_path
 
 DEFAULT_ROOT = Path.home() / ".claude" / "projects"
@@ -66,10 +68,15 @@ def main() -> None:
             x.add_argument("--no-embed", action="store_true", help="keyword index only")
         else:
             x.add_argument("query")  # ask reuses it as the question
+        if name == "search":
             x.add_argument("-n", type=int, default=5)
             x.add_argument("--mode", choices=("hybrid", "keyword", "vector"), default="hybrid")
+            x.add_argument("--rerank", action="store_true", help="reorder the top 20 with a cross-encoder (slower, better)")
+            x.add_argument("--expand", action="store_true", help="let Claude add a translation and keywords (one claude call)")
         if name == "ask":
             x.add_argument("--sources", type=int, default=6, help="how many excerpts go to Claude")
+            x.add_argument("--no-expand", action="store_true", help="skip the translation/keyword step")
+            x.add_argument("--no-rerank", action="store_true", help="skip the cross-encoder")
     a = p.parse_args()
     if a.cmd == "stats":
         stats(a.root)
@@ -81,9 +88,16 @@ def main() -> None:
 
         serve(Store(db_path(a.model)), a.model, a.port)
     elif a.cmd == "search":
-        show(search(Store(db_path(a.model)), a.query, a.n, a.mode, a.model))
+        store = Store(db_path(a.model))
+        if a.rerank or a.expand:  # the deep pipeline is always hybrid
+            hits = smart_search(store, a.query, a.n, a.model, expand_fn=expand if a.expand else None,
+                                rerank_fn=rerank if a.rerank else None)
+        else:
+            hits = search(store, a.query, a.n, a.mode, a.model)
+        show(hits)
     else:
-        hits = search(Store(db_path(a.model)), a.query, a.sources, a.mode, a.model)
+        hits = smart_search(Store(db_path(a.model)), a.query, a.sources, a.model,
+                            expand_fn=None if a.no_expand else expand, rerank_fn=None if a.no_rerank else rerank)
         try:
             answer, sources = ask(a.query, hits)
         except AskError as e:
