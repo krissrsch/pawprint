@@ -15,7 +15,7 @@ from typing import Iterator
 # Injected wrappers that are not something the user typed.
 _NOISE = re.compile(
     r"<(system-reminder|local-command-caveat|local-command-stdout|command-name|"
-    r"command-message|command-args|task-notification|pasted_content[^>]*)>.*?</\1>",
+    r"command-message|command-args|task-notification|pasted_content)(?:\s[^>]*)?>.*?</\1>",
     re.S,
 )
 
@@ -48,7 +48,7 @@ def _text(content) -> str | None:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        parts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
+        parts = [b["text"] for b in content if isinstance(b, dict) and b.get("type") == "text" and isinstance(b.get("text"), str)]
         return "\n".join(p for p in parts if p) or None
     return None
 
@@ -63,6 +63,12 @@ def _clean(s: str) -> str:
     prefix = f"{cmd.group(1).strip()} {args.group(1).strip() if args else ''}".strip() if cmd else ""
     body = _NOISE.sub("", s).strip()
     return f"{prefix} {body}".strip() if prefix else body
+
+
+def _s(d: dict, key: str) -> str:
+    """A string field, or "" when it is missing or has another type (the format is undocumented)."""
+    v = d.get(key)
+    return v if isinstance(v, str) else ""
 
 
 def project_name(cwd: str) -> str:
@@ -87,14 +93,15 @@ def parse_lines(lines: Iterator[str], stats: ParseStats | None = None) -> list[T
         if not isinstance(d, dict):
             stats.bad_lines += 1
             continue
-        t = d.get("type")
-        stats.types[t] += 1
+        t = _s(d, "type")
+        stats.types[t or "<no type>"] += 1
         if t == "ai-title":
-            title = d.get("aiTitle") or title
+            title = _s(d, "aiTitle") or title
             continue
         if t not in ("user", "assistant"):
             continue
-        content = (d.get("message") or {}).get("content")
+        msg = d.get("message")
+        content = msg.get("content") if isinstance(msg, dict) else None
         text = _text(content)
         if text is None:
             # tool_result / thinking / tool_use only: expected, not an error
@@ -108,11 +115,11 @@ def parse_lines(lines: Iterator[str], stats: ParseStats | None = None) -> list[T
             if d.get("isMeta"):
                 continue
             cur = Turn(
-                session_id=d.get("sessionId", ""),
-                project=project_name(d.get("cwd", "")),
-                cwd=d.get("cwd", ""),
-                branch=d.get("gitBranch", ""),
-                timestamp=d.get("timestamp", ""),
+                session_id=_s(d, "sessionId"),
+                project=project_name(_s(d, "cwd")),
+                cwd=_s(d, "cwd"),
+                branch=_s(d, "gitBranch"),
+                timestamp=_s(d, "timestamp"),
                 title="",
                 sidechain=bool(d.get("isSidechain")),
                 user=text,

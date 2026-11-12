@@ -56,3 +56,44 @@ def test_chunk_single_giant_paragraph():
 def test_slash_command_keeps_its_arguments():
     turns = parse_file(FIX)
     assert turns[2].user == "/dev continue with the demo"
+
+
+def test_pasted_content_with_attributes_is_stripped():
+    from pawprint.parse import _clean
+
+    assert _clean("hi <pasted_content id=1>SECRET</pasted_content> x") == "hi  x"
+
+
+def test_malformed_lines_are_counted_not_fatal():
+    from pawprint.parse import parse_lines
+
+    lines = [
+        '{"type":"user","message":"just a string"}',
+        '{"type":[1]}',
+        '{"type":"user","cwd":5,"sessionId":7,"message":{"content":"hello"}}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":42}]}}',
+        '{"type":"ai-title","aiTitle":["x"]}',
+    ]
+    st = ParseStats()
+    turns = parse_lines(lines, st)
+    assert [t.user for t in turns] == ["hello"]
+    assert turns[0].project == "" and turns[0].session_id == "" and turns[0].title == ""
+    assert st.unknown_content >= 1 and st.types["<no type>"] == 1
+
+
+def test_redact_more_token_shapes_and_odd_url_passwords():
+    out = redact("postgres://bob:p@ss/word@db/x")
+    assert "ss/word" not in out and "p@ss" not in out
+    for secret in ["sk_live_" + "a" * 24, "rk_test_" + "b" * 24, "npm_" + "c" * 36,
+                   "glpat-" + "d" * 20, "hf_" + "e" * 34, "sbp_" + "f" * 40]:
+        assert secret not in redact(f"use {secret} here"), secret
+
+
+def test_chunk_rejects_tiny_limits_and_redacts_titles():
+    import pytest
+
+    t = parse_file(FIX)[0]
+    with pytest.raises(ValueError):
+        chunk_turn(t, max_chars=100)
+    t.title = "Rotate API_KEY=abcd1234efgh5678"
+    assert "abcd1234efgh5678" not in chunk_turn(t)[0].title

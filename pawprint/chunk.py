@@ -47,9 +47,12 @@ def _split(text: str, limit: int) -> list[str]:
 
 
 def chunk_turn(turn: Turn, max_chars: int = MAX_CHARS) -> list[Chunk]:
+    if max_chars <= 2 * OVERLAP:
+        raise ValueError(f"max_chars must be larger than {2 * OVERLAP}")  # smaller limits would loop or drop text
     body = f"User: {turn.user}\n\nAssistant: {turn.assistant}" if turn.assistant else f"User: {turn.user}"
     body = redact(body)
+    title = redact(turn.title)  # titles are generated from the chat and can quote a secret too
     return [
-        Chunk(turn.session_id, turn.project, turn.timestamp, turn.title, turn.sidechain, i, p)
+        Chunk(turn.session_id, turn.project, turn.timestamp, title, turn.sidechain, i, p)
         for i, p in enumerate(_split(body, max_chars))
     ]

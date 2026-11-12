@@ -16,10 +16,16 @@ _RULES: list[tuple[re.Pattern, str]] = [
     (re.compile(r"\bAIza[0-9A-Za-z_\-]{30,}"), MASK),
     (re.compile(r"\bxox[abprs]-[A-Za-z0-9\-]{10,}"), MASK),
     (re.compile(r"\bnfp_[A-Za-z0-9]{20,}"), MASK),
+    (re.compile(r"\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}"), MASK),  # Stripe
+    (re.compile(r"\bnpm_[A-Za-z0-9]{30,}"), MASK),
+    (re.compile(r"\bglpat-[A-Za-z0-9_\-]{20,}"), MASK),  # GitLab
+    (re.compile(r"\bhf_[A-Za-z0-9]{30,}"), MASK),  # Hugging Face
+    (re.compile(r"\bsbp_[A-Za-z0-9]{30,}"), MASK),  # Supabase
     (re.compile(r"\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}"), MASK),  # JWT
     (re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._\-]{20,}"), r"\1" + MASK),
-    # user:password@host in URLs
-    (re.compile(r"(?i)(\b[a-z][a-z0-9+.\-]*://[^/\s:@]+:)[^@\s/]+(@)"), r"\1" + MASK + r"\2"),
+    # user:password@host in URLs; greedy up to the last "@", so a raw "@" or "/" in the password is covered too
+    # (masking a bit of host or path in odd URLs is the safe side)
+    (re.compile(r"(?i)(\b[a-z][a-z0-9+.\-]*://[^/\s:@]+:)\S+(@)"), r"\1" + MASK + r"\2"),
     # KEY=value / "key": "value" for secret-looking names
     (
         re.compile(
