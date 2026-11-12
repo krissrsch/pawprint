@@ -20,6 +20,7 @@
   button.primary { background:var(--accent); color:var(--ink); border-color:transparent; font-weight:600; }
   button:disabled { opacity:.6; cursor:wait; }
   :focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
+  .hint { margin:0; color:var(--muted); font-size:13px; }
   #status { margin-top:16px; color:var(--muted); min-height:1.6em; }
   #status.err { color:var(--warn); }
   #answer { margin-top:16px; padding:14px 18px; border-left:3px solid var(--accent); background:var(--card); border-radius:0 12px 12px 0; white-space:pre-wrap; }
@@ -47,9 +48,10 @@
       <select id="project" aria-label="Projekt"><option value="">Alle Projekte</option></select>
       <label>von <input id="since" type="date"></label>
       <label>bis <input id="until" type="date"></label>
-      <button type="submit" id="bSearch">Suchen</button>
-      <button type="button" id="bAsk" class="primary">Fragen</button>
+      <button type="button" id="bSearch" title="Nur Fundstellen, ohne Claude, sofort">Nur suchen</button>
+      <button type="submit" id="bAsk" class="primary" title="Antwort in Sätzen mit Quellen, dauert 10 bis 20 Sekunden">Fragen</button>
     </div>
+    <p class="hint">Enter oder <b>Fragen</b>: Antwort in Sätzen mit Quellen (10 bis 20 s). <b>Nur suchen</b>: sofort die Fundstellen, ohne Claude.</p>
   </form>
   <div id="status" role="status" aria-live="polite"></div>
   <div id="answer" hidden></div>
@@ -129,8 +131,8 @@ async function run(kind) {
   finally { $("bSearch").disabled = $("bAsk").disabled = false; }
 }
 
-$("f").addEventListener("submit", e => { e.preventDefault(); run("search"); });
-$("bAsk").addEventListener("click", () => { if ($("f").reportValidity()) run("ask"); });
+$("f").addEventListener("submit", e => { e.preventDefault(); run("ask"); });
+$("bSearch").addEventListener("click", () => { if ($("f").reportValidity()) run("search"); });
 
 api("/api/projects").then(list => {
   for (const p of list) { const o = document.createElement("option"); o.value = o.textContent = p; $("project").append(o); }
