@@ -186,3 +186,28 @@ e5-large stays available with `PAWPRINT_MODEL=intfloat/multilingual-e5-large`.
 Open points: 40 questions are too few to tune the fusion; on the hard set hybrid ranks below pure
 vector search, so keyword weighting is worth revisiting once the set is larger. MiniLM only reads
 the first 128 tokens of a chunk, which favours the user question at the start of each chunk.
+
+## recall for Claude sessions (S3, 2026-11-12)
+
+Does the `recall` MCP tool help a Claude Code session? `eval/run_recall_eval.py` asks real questions from the
+big set (paraphrased and vague ones, from four projects that still exist on disk) in a fresh `claude -p` session
+(Sonnet, read-only tools Read/Grep/Glob, run in the project folder), once with the pawprint MCP server and once
+without. A Haiku call compares each answer with the quote the question was made from; the answers were then
+checked by hand, because the judge counted one "could not find it" as correct.
+
+| 9 questions | correct (hand-checked) | avg time | avg tokens (incl. cache) | avg cost |
+|---|---|---|---|---|
+| without recall | 2 | 22 s | 36,000 | $0.05 |
+| with recall | 4 | 33 s | 46,000 | $0.05 |
+
+- The two extra answers are facts that only live in chats: why a line in a story file was rewritten, and where
+  the user wanted an app to keep its data. Without recall the session searched the files and gave up.
+- recall never made an answer worse. Where the files had the answer, both runs found it; with recall one of them
+  took 2 instead of 4 turns.
+- It did not save tokens on this set: the tool output and the extra turn cost about as much as the file reading
+  it replaced. It costs about 11 s per question, mostly the reranker.
+- 4 of 9 questions are unanswerable out of context ("the previous answer", "today"); both runs said so.
+  The generated big set is a weak test for this; real recall tasks would be fairer.
+- One answer noted that its excerpt was cut off at 600 characters.
+
+Verdict: recall buys correctness on chat-only knowledge at the same cost, not token savings.
