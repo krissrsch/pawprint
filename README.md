@@ -114,6 +114,23 @@ Nikki starts `pawprint serve --port <free port> --parent-pid <Nikki's pid>` with
 in `PAWPRINT_TOKEN` (not on the command line), and stops the server after ten idle minutes. If Nikki crashes, the server
 notices that its parent is gone and exits, so the search models do not stay in memory.
 
+## Use it from a Claude Code session
+
+Claude can look up earlier chats itself, instead of researching again what was already worked out.
+`pawprint mcp` is an MCP server on stdio with one tool, `recall`: dated excerpts (date, project, title, about
+600 characters each), reranked, with no Claude call of its own and capped at about 2,000 tokens per call.
+It searches the current project (the folder name Claude Code runs in) unless `all_projects` is true.
+
+```
+claude mcp add --scope user pawprint -e PAWPRINT_THREADS=8 -- /path/to/pawprint/.venv/Scripts/pawprint.exe mcp
+pawprint recall "why did we pick SQLite" -n 4 --all   # the same output on the command line
+```
+
+Claude Code starts the server once per session, so the models load once (a few seconds) and a call then takes about
+10 seconds on a CPU, almost all of it in the reranker. The server only reads the index; `pawprint index`, `serve` or
+Nikki keep it current. A line in your `CLAUDE.md` tells Claude when to use it, for example: *before researching
+something that was discussed before, ask `recall`; name the date of a hit; if it contradicts the current file, the file wins.*
+
 ## Privacy and security
 
 - Your transcripts are read, never written. The index lives in `~/.pawprint/`, outside the repository.
@@ -131,12 +148,15 @@ notices that its parent is gone and exits, so the search models do not stay in m
 | `PAWPRINT_RERANKER` | `jinaai/jina-reranker-v2-base-multilingual` | Cross-encoder used by `ask` and `--rerank` |
 | `PAWPRINT_TOKEN` | random per start | Fixed token for `serve`, for a program that starts Pawprint itself |
 | `PAWPRINT_EXPAND_MODEL` | `haiku` | Claude model that rewrites the question before the search; the answer itself always uses `sonnet` |
+| `PAWPRINT_THREADS` | all logical cores | CPU threads for the reranker; on CPUs with efficiency cores the number of performance cores is about twice as fast |
 
 ## Limitations
 
 - The Claude Code transcript format is not documented and may change. The parser is tolerant, but new formats can hide text until it is updated.
 - Plain search is weakest for questions in the other language than the conversation (0.53 in the top 10), because keyword search cannot match across languages. `ask` and `search --expand` fix most of it (0.88) at the cost of one short `claude -p` call (Haiku).
-- The reranker runs on the CPU and needs about 4 seconds per question; the remaining misses are mostly very specific details deep inside long passages.
+- The reranker runs on the CPU and needs 4 to 20 seconds per question, depending on passage length and thread setting; the remaining misses are mostly very specific details deep inside long passages.
+- `recall` always returns its top hits, even when none of them fits; it has no relevance cut-off yet.
+- The project of a chat is the folder Claude Code ran in. Work on one project started from another folder is filed under that folder, so `recall` may need `all_projects`.
 - Vector search is brute force over all windows (about 14,000 for 4,000 chunks). That is fast up to some hundred thousand windows; beyond that it would need a vector index.
 - The web UI labels are German.
 

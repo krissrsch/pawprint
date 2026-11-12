@@ -1,6 +1,6 @@
 # Plan: Pawprint als zweites Gehirn für Claude-Sitzungen
 
-Stand: 12.11.2026. Gegrillt: nein (offene Entscheidungen unten, vor dem Bau klären).
+Gegrillt: ja (12.11.2026, alle Empfehlungen angenommen). S1 und S2 umgesetzt am 12.11.2026.
 
 ## Ziel
 
@@ -77,12 +77,24 @@ Auszüge sind bereits geschwärzt. Was `recall` liefert, landet im Kontext von C
 Anthropic, wie der Chat damals auch. Es kommen nur die gefundenen Auszüge mit, nie der ganze Index.
 Echte Chats bleiben außerhalb des Repos.
 
-## Offene Entscheidungen (vor dem Bau klären)
-1. MCP-Server oder HTTP-Aufruf an den laufenden `serve`? Empfehlung: MCP, weil Claude Code ihn selbst
-   startet und stoppt.
-2. Soll `recall` alle Projekte durchsuchen oder standardmäßig nur das aktuelle? Empfehlung: aktuelles
-   Projekt zuerst, Option für alle.
-3. Obergrenze pro Aufruf: 2.000 Tokens ok?
+## Entscheidungen (Grilling 12.11.2026)
+1. MCP-Server (stdio, `pawprint mcp`) mit einem Werkzeug `recall`; dazu der CLI-Befehl `pawprint recall`,
+   beide über dieselbe Funktion. Ohne MCP-SDK, die vier nötigen JSON-RPC-Methoden sind handgeschrieben.
+2. Standard: nur das aktuelle Projekt (Ordnername, in dem Claude Code läuft); `all_projects=true` für alle.
+   Ohne Chats im Projekt sagt die Ausgabe das und schlägt `all_projects` vor, sie schaltet nicht still um.
+3. Obergrenze 2.000 Tokens (6.000 Zeichen), `n` 1 bis 8, Standard 4.
+4. Jeder Treffer zeigt Datum, Projekt, Titel, Sitzung; Kopfzeile „Hinweis, kein Beleg; die Datei gilt".
+5. Regel in der globalen `CLAUDE.md`, Registrierung per `claude mcp add --scope user`.
+
+## Ergebnis S1/S2 (12.11.2026)
+- Ein Aufruf liefert bei 4 Treffern etwa 2.900 Zeichen (ca. 800 Tokens).
+- Dauer: Der Reranker braucht auf dem i7-13700F etwa 20 s für 20 Kandidaten mit allen 24 Threads, mit
+  `PAWPRINT_THREADS=8` (nur P-Kerne) etwa 10 s. Die 3,9 s aus eval/RESULTS.md wurden nicht erreicht.
+  Kürzere Passagen (800 Zeichen) halbieren die Zeit, verändern aber die Reihenfolge; ob das die
+  Qualität kostet, gehört in S3.
+- Der Projektname kommt aus dem Arbeitsordner. Pawprint-Arbeit lief aus `Websites`, deshalb findet
+  `recall` im Ordner `pawprint` nichts ohne `all_projects`.
+- Es gibt keine Relevanzschwelle: `recall` liefert immer seine besten Treffer, auch wenn keiner passt.
 
 ## Reihenfolge
 S1, S2, S3 (Messung), dann nach Ergebnis S4 und evtl. S5. Nach S1 und S2 Übersicht
