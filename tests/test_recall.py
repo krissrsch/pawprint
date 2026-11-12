@@ -123,3 +123,10 @@ def test_recall_warns_when_the_best_hit_scores_low_but_keeps_the_hits(store):
     weak = recall(store, "login", project=None, rerank_fn=scored(-0.5))
     assert "vermutlich nicht" in weak and "[1]" in weak
     assert "vermutlich nicht" not in recall(store, "login", project=None, rerank_fn=scored(0.5))
+
+
+def test_recall_redacts_again_for_an_index_older_than_the_rules():
+    s = Store(":memory:")
+    s.replace_file("a", 1, 1.0, [chunk("login mit AccountKey=abc123+/== im String")])  # stored as an old index would have it
+    out = recall(s, "login", project=None, rerank_fn=None)
+    assert "abc123" not in out and "AccountKey=[REDACTED]" in out
