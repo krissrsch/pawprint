@@ -9,3 +9,4 @@ data/
 *.jsonl
 !tests/fixtures/*.jsonl
 eval/private/
+demo/
