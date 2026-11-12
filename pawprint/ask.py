@@ -45,13 +45,13 @@ def build_prompt(question: str, hits: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
-def run_claude(prompt: str) -> str:
+def run_claude(prompt: str, model: str = "sonnet") -> str:
     exe = shutil.which("claude")
     if not exe:
         raise AskError("Das Programm 'claude' wurde nicht gefunden. Installiere Claude Code oder nutze 'pawprint search'.")
     try:
         r = subprocess.run(
-            [exe, "-p", "--no-session-persistence", "--tools", "", "--disable-slash-commands", "--setting-sources", "", "--model", "sonnet"],
+            [exe, "-p", "--no-session-persistence", "--tools", "", "--disable-slash-commands", "--setting-sources", "", "--model", model],
             input=prompt, capture_output=True, text=True, encoding="utf-8", timeout=TIMEOUT,
             cwd=tempfile.gettempdir(),  # neutral folder: no project files, no CLAUDE.md of a project
         )

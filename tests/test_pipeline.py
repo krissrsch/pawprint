@@ -101,3 +101,13 @@ def test_web_ask_with_empty_filter_never_calls_the_pipeline(store):
     r = TestClient(app, base_url="http://127.0.0.1").get("/api/ask", params={"q": "cache", "project": "nope"},
                                                          headers={"X-Pawprint-Token": "tok"})
     assert r.status_code == 200 and r.json()["sources"] == []
+
+
+def test_expansion_uses_the_configured_cheap_model(monkeypatch):
+    import pawprint.expand as X
+
+    seen = {}
+    monkeypatch.setattr(X, "run_claude", lambda prompt, model="sonnet": seen.update(model=model) or '{"alt": "a", "kw": "k"}')
+    monkeypatch.setattr(X, "EXPAND_MODEL", "haiku")
+    assert X.expand("frage") == {"alt": "a", "kw": "k"}
+    assert seen["model"] == "haiku"
