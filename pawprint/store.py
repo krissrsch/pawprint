@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS chunks(
   id INTEGER PRIMARY KEY, file TEXT, session_id TEXT, project TEXT, ts TEXT, title TEXT,
   sidechain INTEGER, part INTEGER, text TEXT, hash TEXT, emb BLOB);
 CREATE INDEX IF NOT EXISTS chunks_file ON chunks(file);
+CREATE TABLE IF NOT EXISTS answers(key TEXT PRIMARY KEY, body TEXT);
 CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(
   text, content='chunks', content_rowid='id', tokenize='unicode61 remove_diacritics 2');
 """
@@ -61,6 +62,7 @@ class Store:
             )
             d.execute("INSERT INTO fts(rowid, text) VALUES(?,?)", (cur.lastrowid, c.text))
         d.execute("INSERT OR REPLACE INTO files VALUES(?,?,?)", (path, size, mtime))
+        d.execute("DELETE FROM answers")  # saved answers were written from the old chunks
         self._windows = None
 
     def known_files(self) -> list[str]:
@@ -71,6 +73,7 @@ class Store:
         self.db.execute("INSERT INTO fts(fts, rowid, text) SELECT 'delete', id, text FROM chunks WHERE file=?", (path,))
         self.db.execute("DELETE FROM chunks WHERE file=?", (path,))
         self.db.execute("DELETE FROM files WHERE path=?", (path,))
+        self.db.execute("DELETE FROM answers")
         self._windows = None
 
     def unembedded(self) -> list[tuple[int, str]]:
@@ -119,6 +122,14 @@ class Store:
         if not where:
             return None
         return {r[0] for r in self.db.execute("SELECT id FROM chunks WHERE " + " AND ".join(where), args)}
+
+    def saved_answer(self, key: str) -> str | None:
+        row = self.db.execute("SELECT body FROM answers WHERE key=?", (key,)).fetchone()
+        return row[0] if row else None
+
+    def save_answer(self, key: str, body: str) -> None:
+        self.db.execute("INSERT OR REPLACE INTO answers VALUES(?,?)", (key, body))
+        self.db.commit()
 
     def commit(self) -> None:
         self.db.commit()

@@ -146,3 +146,21 @@ def test_pid_alive_sees_running_and_finished_processes():
         sleeper.kill()
         sleeper.wait()
     assert not pid_alive(sleeper.pid)
+
+
+def test_same_question_is_answered_from_the_saved_answer_until_the_index_changes(store):
+    asked = []
+
+    def answer(q, hits):
+        asked.append(q)
+        return "ok [Quelle 1]", ["[Quelle 1] ..."]
+
+    c = client(store, answer)
+    first = c.get("/api/ask", params={"q": "Login  Redirect"}, headers=H).json()
+    assert c.get("/api/ask", params={"q": "login redirect"}, headers=H).json() == first  # case and spacing do not matter
+    assert asked == ["Login  Redirect"]
+    c.get("/api/ask", params={"q": "login redirect", "project": "alpha"}, headers=H)  # other filter, other answer
+    assert len(asked) == 2
+    store.replace_file("a", 2, 2.0, [chunk("login redirect fix, neu", "alpha", "2026-10-01", "s-a")])
+    c.get("/api/ask", params={"q": "login redirect"}, headers=H)
+    assert len(asked) == 3

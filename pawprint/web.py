@@ -1,6 +1,7 @@
 """Local web UI: search box, answers with clickable sources, filters. Binds to 127.0.0.1 only."""
 from __future__ import annotations
 
+import json
 import re
 import secrets
 import threading
@@ -15,7 +16,7 @@ from .embed import DEFAULT_MODEL
 from .expand import expand
 from .rerank import rerank
 from .search import search, smart_search
-from .store import Store
+from .store import Store, text_hash
 
 PAGE = Path(__file__).with_name("static") / "index.html"
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -81,6 +82,12 @@ def create_app(store: Store, token: str, model: str = DEFAULT_MODEL, answer=ask,
 
     @app.get("/api/ask", dependencies=[Depends(auth)])
     def api_ask(q: str = Query(min_length=1, max_length=500), project: str = "", since: str = "", until: str = ""):
+        # the same question with the same filters costs nothing the second time; any index change clears the saved answers
+        key = text_hash(json.dumps([" ".join(q.lower().split()), project, since, until]))
+        with lock:
+            saved = store.saved_answer(key)
+        if saved:
+            return json.loads(saved)
         allowed = allowed_for(project, since, until)
         hits = [] if allowed == set() else find(q, allowed, lock)  # the slow steps run outside the lock
         try:
@@ -88,7 +95,10 @@ def create_app(store: Store, token: str, model: str = DEFAULT_MODEL, answer=ask,
         except AskError as e:
             raise HTTPException(502, str(e)) from None
         # same rule as the CLI: no source list next to "not found"
-        return {"answer": text, "sources": [view(h) for h in hits] if used else []}
+        result = {"answer": text, "sources": [view(h) for h in hits] if used else []}
+        with lock:
+            store.save_answer(key, json.dumps(result, ensure_ascii=False))
+        return result
 
     return app
 
