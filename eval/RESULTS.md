@@ -150,6 +150,24 @@ details inside long passages.
 refused, 10-21 s per question. `ask` and the web answer button use the pipeline; plain search stays
 instant and offers `--expand` and `--rerank`.
 
+## Checklist of 35 questions, answered end to end (2026-11-12)
+
+`eval/make_testfragen.py` picks 28 questions from the big set whose evidence occurs in exactly one chunk, from
+sessions before the tool was built, plus 7 special ones (three that have no answer, two about a secret that
+was typed into a chat, a project and date filter, the timing). `eval/run_testfragen.py` sends every question
+through the real `ask` pipeline and lets Claude compare each answer with the source quote.
+
+| Run | Graded "passt" by Claude | After reading the disputed ones |
+|---|---|---|
+| 1 | 31 of 35 | 34 of 35: three answers were right but quoted more than the grader's snippet |
+| 2 | 34 of 35 | 35 of 35 |
+
+The one answer graded wrong in both runs is the best one: the chat said "a new tunnel loses the ROM" and
+corrected itself an hour later ("Ein neuer Tunnel löscht das ROM nicht"); Pawprint found both passages and
+answered with the correction. The special questions passed in both runs: no answer invented for the three
+unanswerable ones, the secret never printed, the filter kept to the project and dates, 10-21 s per question.
+The user checked the first 5 by hand; all were right.
+
 ## Cost (CPU, first full index)
 
 | Model | Index time | Peak RAM | Query |

@@ -30,10 +30,11 @@ python -m venv .venv
 pawprint index                          # first run: about 3 minutes for ~4,000 chunks
 pawprint search "how did I fix the login redirect"
 pawprint ask "why did we pick SQLite over Postgres?"
-pawprint serve                          # web UI, prints a link with a one-time token
+pawprint serve                          # updates the index, then the web UI with a one-time token link
 ```
 
-The first `index` downloads the embedding model (about 220 MB). Later runs only read
+The first `index` downloads the embedding model (about 220 MB). After a Pawprint update that changes parsing or redaction,
+`pawprint index --reread` parses every transcript again in seconds; text that did not change keeps its vectors. Later runs only read
 transcripts that changed and finish in seconds. The first `ask` also downloads the reranker
 (about 1.1 GB); an answer then takes 10 to 20 seconds on a CPU.
 
@@ -106,6 +107,13 @@ English ones) with plain hybrid search.
 The questions stay private because they come from personal sessions; the scripts that build and
 score them are in `eval/`. Details, model comparison and costs: [eval/RESULTS.md](eval/RESULTS.md).
 
+## Use it from Nikki
+
+[Nikki](https://github.com/krissrsch/nikki), a notch for Windows that runs Claude Code, has a **Paw** tab that asks Pawprint.
+Nikki starts `pawprint serve --port <free port> --parent-pid <Nikki's pid>` with the first question, passes the token
+in `PAWPRINT_TOKEN` (not on the command line), and stops the server after ten idle minutes. If Nikki crashes, the server
+notices that its parent is gone and exits, so the search models do not stay in memory.
+
 ## Privacy and security
 
 - Your transcripts are read, never written. The index lives in `~/.pawprint/`, outside the repository.
@@ -121,6 +129,7 @@ score them are in `eval/`. Details, model comparison and costs: [eval/RESULTS.md
 | `PAWPRINT_HOME` | `~/.pawprint` | Where the index files are stored |
 | `PAWPRINT_MODEL` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | Embedding model ([fastembed](https://github.com/qdrant/fastembed) name); each model gets its own index file |
 | `PAWPRINT_RERANKER` | `jinaai/jina-reranker-v2-base-multilingual` | Cross-encoder used by `ask` and `--rerank` |
+| `PAWPRINT_TOKEN` | random per start | Fixed token for `serve`, for a program that starts Pawprint itself |
 | `PAWPRINT_EXPAND_MODEL` | `haiku` | Claude model that rewrites the question before the search; the answer itself always uses `sonnet` |
 
 ## Limitations
