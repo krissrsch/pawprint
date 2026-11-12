@@ -3,7 +3,7 @@
 Usage: python eval/run_ask_eval.py [questions.json]
 Each item is {"q": question, "must": [substrings the answer has to contain], "answerable": false for
 questions the history cannot answer}. The real set lives in eval/private/ (git-ignored).
-Every question costs one `claude -p` call, so keep the set small.
+Every question costs two `claude -p` calls (expansion and answer) plus ~4 s of reranking, so keep the set small.
 """
 import json
 import sys
@@ -12,7 +12,9 @@ from pathlib import Path
 
 from pawprint.ask import NOT_FOUND, AskError, ask
 from pawprint.embed import DEFAULT_MODEL
-from pawprint.search import search
+from pawprint.expand import expand
+from pawprint.rerank import rerank
+from pawprint.search import smart_search
 from pawprint.store import Store, db_path
 
 qfile = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).parent / "private" / "ask_questions.json")
@@ -24,7 +26,7 @@ for it in items:
     t0 = time.time()
     answerable = it.get("answerable", True)
     try:
-        answer, sources = ask(it["q"], search(store, it["q"], 6))
+        answer, sources = ask(it["q"], smart_search(store, it["q"], 6, expand_fn=expand, rerank_fn=rerank))  # same pipeline as `pawprint ask`
     except AskError as e:
         sys.exit(f"claude failed: {e}")
     refused = answer.startswith("Nicht gefunden")
