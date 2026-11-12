@@ -36,7 +36,8 @@ def create_app(store: Store, token: str, model: str = DEFAULT_MODEL, answer=ask)
 
     def auth(request: Request) -> None:
         sent = request.headers.get("x-pawprint-token", "")
-        if not secrets.compare_digest(sent, token):
+        # bytes, because compare_digest raises on non-ASCII str and that would be a 500 instead of a 401
+        if not secrets.compare_digest(sent.encode("utf-8", "surrogateescape"), token.encode()):
             raise HTTPException(401, "missing or wrong token")
 
     def run_search(q: str, n: int, mode: str, project: str, since: str, until: str) -> list[dict]:
@@ -69,10 +70,11 @@ def create_app(store: Store, token: str, model: str = DEFAULT_MODEL, answer=ask)
     def api_ask(q: str = Query(min_length=1, max_length=500), project: str = "", since: str = "", until: str = ""):
         hits = run_search(q, 6, "hybrid", project, since, until)
         try:
-            text, _ = answer(q, hits)
+            text, used = answer(q, hits)
         except AskError as e:
             raise HTTPException(502, str(e)) from None
-        return {"answer": text, "sources": [view(h) for h in hits]}
+        # same rule as the CLI: no source list next to "not found"
+        return {"answer": text, "sources": [view(h) for h in hits] if used else []}
 
     return app
 

@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from pawprint.ask import AskError
+from pawprint.ask import NOT_FOUND, AskError
 from pawprint.chunk import Chunk
 from pawprint.store import Store
 from pawprint.web import create_app
@@ -22,7 +22,7 @@ def store():
     return s
 
 
-def client(store, answer=lambda q, hits: ("ok [Quelle 1]", [])):
+def client(store, answer=lambda q, hits: ("ok [Quelle 1]", ["[Quelle 1] ..."])):
     return TestClient(create_app(store, TOKEN, answer=answer), base_url="http://127.0.0.1")
 
 
@@ -74,7 +74,7 @@ def test_ask_returns_answer_with_sources(store):
 
     def fake(q, hits):
         seen["n"] = len(hits)
-        return "Antwort [Quelle 1]", []
+        return "Antwort [Quelle 1]", ["[Quelle 1] ..."]
 
     r = client(store, fake).get("/api/ask", params={"q": "login"}, headers=H).json()
     assert r["answer"] == "Antwort [Quelle 1]" and seen["n"] >= 1 and r["sources"][0]["text"]
@@ -86,3 +86,13 @@ def test_ask_failure_becomes_502(store):
 
     r = client(store, boom).get("/api/ask", params={"q": "login"}, headers=H)
     assert r.status_code == 502 and "nicht eingeloggt" in r.json()["detail"]
+
+
+def test_non_ascii_token_is_401_not_500(store):
+    r = client(store).get("/api/projects", headers={"X-Pawprint-Token": "ét0ken".encode("latin-1")})
+    assert r.status_code == 401
+
+
+def test_not_found_answer_returns_no_sources(store):
+    r = client(store, lambda q, hits: (NOT_FOUND, [])).get("/api/ask", params={"q": "login"}, headers=H).json()
+    assert r == {"answer": NOT_FOUND, "sources": []}
