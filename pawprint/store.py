@@ -40,7 +40,7 @@ class Store:
     def __init__(self, path: Path | str):
         if str(path) != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(str(path))
+        self.db = sqlite3.connect(str(path), check_same_thread=False)  # the web server reads from worker threads
         self.db.executescript(SCHEMA)
 
     def file_state(self, path: str):
@@ -81,6 +81,25 @@ class Store:
             return {}
         q = f"SELECT {','.join(COLS)} FROM chunks WHERE id IN ({','.join('?' * len(ids))})"
         return {r[0]: dict(zip(COLS, r)) for r in self.db.execute(q, ids)}
+
+    def projects(self) -> list[str]:
+        return [r[0] for r in self.db.execute("SELECT project FROM chunks GROUP BY project ORDER BY count(*) DESC") if r[0]]
+
+    def allowed_ids(self, project: str | None = None, since: str | None = None, until: str | None = None) -> set[int] | None:
+        """Chunk ids matching the filters (dates as YYYY-MM-DD, inclusive); None means no filter."""
+        where, args = [], []
+        if project:
+            where.append("project=?")
+            args.append(project)
+        if since:
+            where.append("substr(ts,1,10)>=?")
+            args.append(since)
+        if until:
+            where.append("substr(ts,1,10)<=?")
+            args.append(until)
+        if not where:
+            return None
+        return {r[0] for r in self.db.execute("SELECT id FROM chunks WHERE " + " AND ".join(where), args)}
 
     def commit(self) -> None:
         self.db.commit()

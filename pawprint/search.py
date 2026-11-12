@@ -40,12 +40,20 @@ def rrf(rankings: list[list[int]], k: int = RRF_K) -> list[int]:
     return sorted(score, key=score.get, reverse=True)
 
 
-def search(store: Store, q: str, limit: int = 8, mode: str = "hybrid", model: str = DEFAULT_MODEL, pool: int = 50) -> list[dict]:
+def search(store: Store, q: str, limit: int = 8, mode: str = "hybrid", model: str = DEFAULT_MODEL, pool: int = 50,
+           allowed: set[int] | None = None) -> list[dict]:
+    """allowed: restrict to these chunk ids (filters apply before ranking, so the pool is widened)."""
+    if allowed is not None:
+        if not allowed:
+            return []
+        pool = max(pool, 20000)  # shortcut: filter after ranking, so rank (almost) everything; fine up to ~20k chunks, then filter in SQL
     rankings = []
     if mode in ("hybrid", "keyword"):
         rankings.append(keyword_ids(store, q, pool))
     if mode in ("hybrid", "vector"):
         rankings.append(vector_ids(store, q, pool, model))
+    if allowed is not None:
+        rankings = [[i for i in r if i in allowed] for r in rankings]
     top = rrf(rankings)[:limit]
     got = store.get(top)
     return [got[i] for i in top if i in got]
