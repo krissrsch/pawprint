@@ -57,3 +57,18 @@ def test_one_unreadable_file_does_not_stop_the_run(tmp_path):
     assert r["failed"] == 1 and r["changed"] == 1 and count(s) == 1
     assert any("broken.jsonl" in line for line in logs)
     assert os.path.isdir(root / "p" / "broken.jsonl")
+
+
+def test_reread_applies_new_parsing_but_keeps_vectors_of_unchanged_text(tmp_path):
+    import numpy as np
+
+    root = tmp_path / "projects"
+    session(root / "p" / "a.jsonl", "keep me")
+    s = Store(":memory:")
+    index(s, root, embed=False, log=lambda *_: None)
+    (i,) = [i for i, _ in s.unembedded()]
+    s.set_embeddings([i], [np.ones((1, 3))])
+    # nothing changed: a normal run skips the file, a reread parses it again but the vector stays
+    assert index(s, root, embed=False, log=lambda *_: None)["changed"] == 0
+    assert index(s, root, embed=False, log=lambda *_: None, reread=True)["changed"] == 1
+    assert s.unembedded() == [] and count(s) == 1

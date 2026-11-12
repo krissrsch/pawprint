@@ -68,6 +68,7 @@ def main() -> None:
         elif name == "index":
             x.add_argument("--root", type=Path, default=DEFAULT_ROOT)
             x.add_argument("--no-embed", action="store_true", help="keyword index only")
+            x.add_argument("--reread", action="store_true", help="parse all transcripts again, e.g. after a redaction change; unchanged text keeps its vectors")
         else:
             x.add_argument("query")  # ask reuses it as the question
         if name == "search":
@@ -84,7 +85,7 @@ def main() -> None:
         stats(a.root)
     elif a.cmd == "index":
         t0 = time.time()
-        print(index(Store(db_path(a.model)), a.root, a.model, embed=not a.no_embed), f"{time.time() - t0:.1f}s")
+        print(index(Store(db_path(a.model)), a.root, a.model, embed=not a.no_embed, reread=a.reread), f"{time.time() - t0:.1f}s")
     elif a.cmd == "serve":
         from .web import serve  # imported late so the other commands start fast
 

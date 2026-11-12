@@ -12,7 +12,8 @@ from .parse import longpath, parse_file
 from .store import Store
 
 
-def index(store: Store, root: Path, model: str = DEFAULT_MODEL, embed: bool = True, log=print) -> dict:
+def index(store: Store, root: Path, model: str = DEFAULT_MODEL, embed: bool = True, log=print, reread: bool = False) -> dict:
+    """reread: parse every transcript again (after a change to parsing or redaction); vectors of unchanged text are kept."""
     root = Path(root).resolve()  # one key per file, whether the root was given relative or absolute
     n_files = n_changed = n_failed = n_removed = 0
     seen: set[str] = set()
@@ -22,7 +23,7 @@ def index(store: Store, root: Path, model: str = DEFAULT_MODEL, embed: bool = Tr
         n_files += 1
         try:
             st = os.stat(longpath(f))
-            if store.file_state(key) == (st.st_size, st.st_mtime):
+            if not reread and store.file_state(key) == (st.st_size, st.st_mtime):
                 continue
             chunks = [c for t in parse_file(f) for c in chunk_turn(t)]
         except Exception as e:  # one locked or odd file must not stop the rest; it is retried next run
