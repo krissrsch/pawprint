@@ -15,7 +15,8 @@ TOOL = {
         "before, not for new tasks. Returns dated excerpts; treat them as hints, the current files win. "
         "Searches the current project unless all_projects is true. Always fill `keywords`: the search matches words "
         "and meaning, so add the likely terms in German AND English, and file or tool names. If the first "
-        "result misses, retry once with all_projects=true or other keywords."
+        "result misses, retry once with all_projects=true or other keywords. Each hit has an id: if an excerpt "
+        "is cut off right where it matters, call again with more=<id> to read the whole passage and the next one."
     ),
     "inputSchema": {
         "type": "object",
@@ -25,8 +26,9 @@ TOOL = {
             "n": {"type": "integer", "minimum": 1, "maximum": 8, "default": 4, "description": "Number of excerpts."},
             "all_projects": {"type": "boolean", "default": False, "description": "Search every project."},
             "project": {"type": "string", "description": "Project folder name to search instead of the current one."},
+            "more": {"type": "integer", "description": "id of a hit: return that whole passage and the next one instead of searching."},
         },
-        "required": ["query"],
+        "required": [],
     },
 }
 
@@ -38,8 +40,9 @@ def _version() -> str:
         return "0"
 
 
-def handle(msg: dict, run, here: str) -> dict | None:
-    """One JSON-RPC message -> its response (None for notifications). run(query, n, project, keywords) -> text."""
+def handle(msg: dict, run, here: str, more=None) -> dict | None:
+    """One JSON-RPC message -> its response (None for notifications).
+    run(query, n, project, keywords) -> text; more(chunk_id) -> text."""
     if "id" not in msg:
         return None
     mid, method = msg["id"], msg.get("method")
@@ -54,7 +57,12 @@ def handle(msg: dict, run, here: str) -> dict | None:
         result = {"tools": [TOOL]}
     elif method == "tools/call" and params.get("name") == "recall":
         args = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
-        q, n = args.get("query"), args.get("n", 4)
+        q, n, cid = args.get("query"), args.get("n", 4), args.get("more")
+        if more and isinstance(cid, int) and not isinstance(cid, bool):
+            try:
+                return _text(mid, more(cid))
+            except Exception as e:
+                return _text(mid, f"Lesen fehlgeschlagen: {type(e).__name__}: {e}", error=True)
         if not isinstance(q, str) or not q.strip():
             return _text(mid, "query fehlt.", error=True)
         if not isinstance(n, int) or isinstance(n, bool):
@@ -81,7 +89,7 @@ def _error(mid, code: int, message: str) -> dict:
     return {"jsonrpc": "2.0", "id": mid, "error": {"code": code, "message": message}}
 
 
-def serve_stdio(run, here: str, inp=None, out=None) -> None:
+def serve_stdio(run, here: str, inp=None, out=None, more=None) -> None:
     """Newline-delimited JSON-RPC on stdin/stdout until stdin closes."""
     if inp is None:
         sys.stdin.reconfigure(encoding="utf-8")  # Windows pipes default to the ANSI code page
@@ -95,7 +103,7 @@ def serve_stdio(run, here: str, inp=None, out=None) -> None:
             continue
         try:
             msg = json.loads(line)
-            resp = handle(msg, run, here) if isinstance(msg, dict) else _error(None, -32600, "invalid request")
+            resp = handle(msg, run, here, more) if isinstance(msg, dict) else _error(None, -32600, "invalid request")
         except ValueError:
             resp = _error(None, -32700, "parse error")
         if resp is not None:

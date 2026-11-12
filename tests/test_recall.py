@@ -10,7 +10,7 @@ import pytest
 import pawprint.search as S
 from pawprint.chunk import Chunk
 from pawprint.mcp_server import TOOL, handle, serve_stdio
-from pawprint.recall import EXCERPT, MAX_CHARS, NOTE, excerpt, focus_words, recall
+from pawprint.recall import EXCERPT, MAX_CHARS, NOTE, excerpt, focus_words, more, recall
 from pawprint.store import Store
 
 
@@ -130,3 +130,20 @@ def test_recall_redacts_again_for_an_index_older_than_the_rules():
     s.replace_file("a", 1, 1.0, [chunk("login mit AccountKey=abc123+/== im String")])  # stored as an old index would have it
     out = recall(s, "login", project=None, rerank_fn=None)
     assert "abc123" not in out and "AccountKey=[REDACTED]" in out
+
+
+def test_more_returns_the_whole_chunk_and_its_neighbours_from_the_same_file():
+    s = Store(":memory:")
+    s.replace_file("a", 1, 1.0, [chunk(f"teil {i} " + "y" * 900, part=i) for i in range(4)])
+    s.replace_file("b", 1, 1.0, [chunk("anderes gespräch", project="beta")])
+    ids = [r[0] for r in s.db.execute("SELECT id FROM chunks WHERE file='a' ORDER BY id")]
+    out = more(s, ids[1])
+    assert "teil 0" in out and "teil 1" in out and "teil 2" in out and "teil 3" not in out
+    assert f"[id {ids[1]}] (gesuchtes Stück)" in out and "y" * 900 in out  # whole, not cut to an excerpt
+    assert "anderes" not in more(s, ids[3]) and "Kein Stück" in more(s, 99999)
+
+
+def test_mcp_more_reads_a_passage_without_a_query():
+    got = handle(rpc("tools/call", name="recall", arguments={"more": 42}), lambda *a: "search", "a", more=lambda i: f"stück {i}")
+    assert got["result"]["content"][0]["text"] == "stück 42"
+    assert handle(rpc("tools/call", name="recall", arguments={"more": True}), lambda *a: "search", "a", more=lambda i: "x")["result"]["isError"]

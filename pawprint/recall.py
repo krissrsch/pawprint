@@ -71,10 +71,30 @@ def recall(store: Store, query: str, n: int = 4, project: str | None = None, mod
         out += "\nAchtung: Die Treffer passen vermutlich nicht. Anders formulieren, Stichwörter in beiden Sprachen oder all_projects=true."
     for i, h in enumerate(hits, 1):
         title = f" · \"{h['title'][:100]}\"" if h["title"] else ""
-        entry = f"\n\n[{i}] {h['ts'][:10]} · {h['project']}{title} · Sitzung {h['session_id'][:8]}\n{excerpt(h['text'], words)}"
+        entry = (f"\n\n[{i}] {h['ts'][:10]} · {h['project']}{title} · Sitzung {h['session_id'][:8]} · id {h['id']}\n"
+                 f"{excerpt(h['text'], words)}")
         entry = redact(entry)  # again: the index may predate a newer redaction rule (same as ask)
         if len(out) + len(entry) > MAX_CHARS:
             out += "\n\n(weitere Treffer wegen der Größengrenze weggelassen)"
+            break
+        out += entry
+    return out + "\n\nAuszug abgeschnitten und wichtig? more=<id> liefert das ganze Stück und das folgende."
+
+
+def more(store: Store, chunk_id: int) -> str:
+    """The whole chunk `chunk_id` and its neighbours in the same transcript, for an excerpt that was cut off."""
+    row = store.db.execute("SELECT file FROM chunks WHERE id=?", (chunk_id,)).fetchone()
+    if not row:
+        return f"Kein Stück mit id {chunk_id}."
+    ids = [r[0] for r in store.db.execute(
+        "SELECT id FROM chunks WHERE file=? AND id BETWEEN ? AND ? ORDER BY id", (row[0], chunk_id - 1, chunk_id + 1))]
+    got = store.get(ids)
+    out = NOTE
+    for i in ids:  # the one before only as far as the cap allows: the asked-for chunk and the next matter most
+        h = got[i]
+        mark = " (gesuchtes Stück)" if i == chunk_id else ""
+        entry = redact(f"\n\n[id {i}]{mark} {h['ts'][:10]} · {h['project']}\n" + " ".join(without_head(h["text"]).split()))
+        if len(out) + len(entry) > MAX_CHARS:
             break
         out += entry
     return out
