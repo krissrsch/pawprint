@@ -211,3 +211,36 @@ checked by hand, because the judge counted one "could not find it" as correct.
 - One answer noted that its excerpt was cut off at 600 characters.
 
 Verdict: recall buys correctness on chat-only knowledge at the same cost, not token savings.
+
+## Making recall find more (2026-11-12)
+
+`eval/run_recall_variants.py`, 48 questions from the big set (12 per style), hybrid search + reranker, top 4.
+"in top 4" means the quote is in one of the 4 chunks; "shown" means it is inside the excerpt the session actually reads.
+
+| Variant | in top 4 | shown | reranker per question |
+|---|---|---|---|
+| before: whole chunks to the reranker, first 600 characters shown | 0.75 | 0.48 | 6.9-9.3 s |
+| reranker reads the first 700 characters | 0.58 | 0.52 | 4.0 s |
+| + keywords from the caller, excerpt centred on the question's words | 0.83 | 0.71 | 6.8 s |
+| **+ reranker reads the 700 characters around those words (now the default)** | **0.88** | **0.75** | **3.2 s** |
+
+The biggest loss before was the excerpt: half of the right passages were in the top 4 but cut off. Shown by style,
+before -> now: keywords 0.67 -> 0.83, paraphrase 0.50 -> 0.67, vague 0.33 -> 0.83, other language 0.42 -> 0.67.
+The keywords stand in for what the calling Claude writes into the tool's `keywords` field (here the cached
+rewrites); the tool description asks for them in both languages. With this variant the reranker's top score
+separates hits from misses well (hits: 9 in 10 above 0.07; misses: 9 in 10 below -0.19), so recall warns
+when the top score is below 0. Hits are not dropped: 48 questions are too few to set a hard cut-off.
+
+## Skipping the rewrite in ask (S4, 2026-11-12)
+
+`eval/run_skip_expand.py`, all 798 questions: is the quote among the 20 candidates the reranker reads?
+Rule tested: skip the Haiku rewrite when keyword and vector search agree on the top chunk.
+
+| | share | plain | with rewrite |
+|---|---|---|---|
+| search agrees | 13 % | 0.97 | 0.99 |
+| search disagrees | 87 % | 0.79 | 0.89 |
+
+Skipping on agreement keeps 0.896 of the quotes against 0.898 always rewriting, but saves only 13 % of the Haiku
+calls, which are about a sixteenth of what an answer costs. Not built. A repeated question is now answered from
+a saved answer instead (cleared whenever the index changes).
