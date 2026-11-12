@@ -44,3 +44,39 @@ def test_replaced_chunks_leave_the_keyword_index():
     s.replace_file("f", 2, 2.0, [mk("gamma delta")])
     assert keyword_ids(s, "alpha", 5) == []
     assert len(search(s, "gamma", mode="keyword")) == 1
+
+
+def test_windows_cover_the_whole_chunk_and_keep_the_header():
+    from pawprint.chunk import STEP, WINDOW, windows
+
+    body = "".join(chr(65 + i % 26) for i in range(1400))
+    ws = windows("[proj | title]\n" + body)
+    assert all(w.startswith("[proj | title]\n") for w in ws)
+    covered = set()
+    for n, w in enumerate(ws):
+        covered.update(range(n * STEP, n * STEP + len(w.split("\n", 1)[1])))
+    assert covered >= set(range(len(body)))
+    assert all(len(w.split("\n", 1)[1]) <= WINDOW for w in ws)
+    assert windows("short") == ["short"]
+
+
+def test_vector_search_scores_a_chunk_by_its_best_window(monkeypatch):
+    import pawprint.search as S
+
+    s = Store(":memory:")
+    s.replace_file("f", 1, 1.0, [mk("first"), mk("second", part=1)])
+    a, b = [i for i, _ in s.unembedded()]
+    # chunk a: one weak window; chunk b: a weak window and a perfect one
+    s.set_embeddings([a, b], [np.array([[0.6, 0.8]]), np.array([[0.0, 1.0], [1.0, 0.0]])])
+    monkeypatch.setattr(S, "embed_query", lambda q, model: np.array([1.0, 0.0], dtype=np.float32))
+    assert S.vector_ids(s, "q", 2) == [b, a]
+
+
+def test_window_cache_is_dropped_when_the_index_changes():
+    s = Store(":memory:")
+    s.replace_file("f", 1, 1.0, [mk("one")])
+    (i,) = [i for i, _ in s.unembedded()]
+    s.set_embeddings([i], [np.ones((2, 3))])
+    assert s.windows(3)[1].shape == (2, 3)
+    s.forget("f")
+    assert len(s.windows(3)[0]) == 0

@@ -42,6 +42,7 @@ class Store:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(str(path), check_same_thread=False)  # the web server reads from worker threads
         self.db.executescript(SCHEMA)
+        self._windows = None
 
     def file_state(self, path: str):
         return self.db.execute("SELECT size, mtime FROM files WHERE path=?", (path,)).fetchone()
@@ -60,6 +61,7 @@ class Store:
             )
             d.execute("INSERT INTO fts(rowid, text) VALUES(?,?)", (cur.lastrowid, c.text))
         d.execute("INSERT OR REPLACE INTO files VALUES(?,?,?)", (path, size, mtime))
+        self._windows = None
 
     def known_files(self) -> list[str]:
         return [r[0] for r in self.db.execute("SELECT path FROM files")]
@@ -69,22 +71,29 @@ class Store:
         self.db.execute("INSERT INTO fts(fts, rowid, text) SELECT 'delete', id, text FROM chunks WHERE file=?", (path,))
         self.db.execute("DELETE FROM chunks WHERE file=?", (path,))
         self.db.execute("DELETE FROM files WHERE path=?", (path,))
+        self._windows = None
 
     def unembedded(self) -> list[tuple[int, str]]:
         return self.db.execute("SELECT id, text FROM chunks WHERE emb IS NULL").fetchall()
 
-    def set_embeddings(self, ids: list[int], vecs: np.ndarray) -> None:
+    def set_embeddings(self, ids: list[int], vecs) -> None:
+        """vecs: per chunk one vector or a (windows x dim) array; the rows are stored back to back in one blob."""
         self.db.executemany(
-            "UPDATE chunks SET emb=? WHERE id=?", [(v.astype(np.float32).tobytes(), i) for i, v in zip(ids, vecs)]
+            "UPDATE chunks SET emb=? WHERE id=?", [(np.asarray(v, dtype=np.float32).tobytes(), i) for i, v in zip(ids, vecs)]
         )
+        self._windows = None
 
-    def matrix(self) -> tuple[np.ndarray, np.ndarray]:
-        """(ids, embedding matrix) of all embedded chunks.
-        shortcut: rebuilt from SQLite on every query (~ms at 4k chunks); cache it on the Store above ~50k chunks."""
+    def windows(self, dim: int) -> tuple[np.ndarray, np.ndarray]:
+        """(owning chunk id per row, window matrix) over all embedded chunks. Cached until the index changes."""
+        if self._windows is not None and self._windows[1].shape[1:] == (dim,):
+            return self._windows
         rows = self.db.execute("SELECT id, emb FROM chunks WHERE emb IS NOT NULL").fetchall()
         if not rows:
-            return np.zeros(0, dtype=np.int64), np.zeros((0, 0), dtype=np.float32)
-        return np.array([r[0] for r in rows]), np.vstack([np.frombuffer(r[1], dtype=np.float32) for r in rows])
+            return np.zeros(0, dtype=np.int64), np.zeros((0, dim), dtype=np.float32)
+        mats = [np.frombuffer(r[1], dtype=np.float32).reshape(-1, dim) for r in rows]
+        owner = np.repeat(np.array([r[0] for r in rows]), [len(m) for m in mats])
+        self._windows = (owner, np.vstack(mats))
+        return self._windows
 
     def get(self, ids: list[int]) -> dict[int, dict]:
         if not ids:

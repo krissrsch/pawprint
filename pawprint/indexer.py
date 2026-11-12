@@ -4,7 +4,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from .chunk import chunk_turn
+import numpy as np
+
+from .chunk import chunk_turn, windows
 from .embed import DEFAULT_MODEL, embed_passages
 from .parse import longpath, parse_file
 from .store import Store
@@ -39,7 +41,10 @@ def index(store: Store, root: Path, model: str = DEFAULT_MODEL, embed: bool = Tr
     todo = store.unembedded() if embed else []
     for i in range(0, len(todo), 64):
         batch = todo[i : i + 64]
-        store.set_embeddings([b[0] for b in batch], embed_passages([b[1] for b in batch], model))
+        wins = [windows(text) for _, text in batch]
+        vecs = embed_passages([w for ws in wins for w in ws], model)
+        bounds = np.cumsum([0] + [len(ws) for ws in wins])
+        store.set_embeddings([b[0] for b in batch], [vecs[a:b] for a, b in zip(bounds[:-1], bounds[1:])])
         store.commit()
         log(f"embedded {min(i + 64, len(todo))}/{len(todo)}")
     return {"files": n_files, "changed": n_changed, "failed": n_failed, "removed": n_removed, "embedded": len(todo)}

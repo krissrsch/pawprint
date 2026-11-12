@@ -47,6 +47,20 @@ def _split(text: str, limit: int) -> list[str]:
     return pieces
 
 
+WINDOW = 450  # about 120 tokens, what MiniLM reads before it truncates
+STEP = 300
+
+
+def windows(text: str) -> list[str]:
+    """Overlapping slices of a chunk for embedding, each prefixed with the chunk's header line.
+    The embedding model only reads ~128 tokens; without windows most of a 1,500-char chunk was invisible."""
+    first, sep, rest = text.partition("\n")
+    head = first if sep and first.startswith("[") and first.endswith("]") and " | " in first else ""
+    body = rest if head else text
+    starts = range(0, max(len(body) - (WINDOW - STEP), 1), STEP)
+    return [(f"{head}\n{body[s:s + WINDOW]}" if head else body[s:s + WINDOW]) for s in starts]
+
+
 def without_head(text: str) -> str:
     """The chunk text without its leading "[project | title]" line, for display."""
     first, sep, rest = text.partition("\n")
