@@ -12,7 +12,9 @@ def _load(name: str):
     if name not in _cache:
         from fastembed.rerank.cross_encoder import TextCrossEncoder  # late: heavy, and only used for ask / --rerank
 
-        _cache[name] = TextCrossEncoder(model_name=name)
+        # On CPUs with efficiency cores the default (all logical cores) waits on the slow ones: i7-13700F 20 s -> 10 s with 8.
+        threads = os.environ.get("PAWPRINT_THREADS")
+        _cache[name] = TextCrossEncoder(model_name=name, threads=int(threads) if threads else None)
     return _cache[name]
 
 
