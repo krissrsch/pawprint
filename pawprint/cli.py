@@ -1,4 +1,4 @@
-"""pawprint command line: stats, index, search, ask."""
+"""pawprint command line: stats, index, search, ask, serve."""
 from __future__ import annotations
 
 import argparse
@@ -56,10 +56,12 @@ def main() -> None:
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("stats", help="parse all transcripts and print counts")
     s.add_argument("--root", type=Path, default=DEFAULT_ROOT)
-    for name in ("index", "search", "ask"):
+    for name in ("index", "search", "ask", "serve"):
         x = sub.add_parser(name)
         x.add_argument("--model", default=DEFAULT_MODEL)
-        if name == "index":
+        if name == "serve":
+            x.add_argument("--port", type=int, default=8765)
+        elif name == "index":
             x.add_argument("--root", type=Path, default=DEFAULT_ROOT)
             x.add_argument("--no-embed", action="store_true", help="keyword index only")
         else:
@@ -74,6 +76,10 @@ def main() -> None:
     elif a.cmd == "index":
         t0 = time.time()
         print(index(Store(db_path(a.model)), a.root, a.model, embed=not a.no_embed), f"{time.time() - t0:.1f}s")
+    elif a.cmd == "serve":
+        from .web import serve  # imported late so the other commands start fast
+
+        serve(Store(db_path(a.model)), a.model, a.port)
     elif a.cmd == "search":
         show(search(Store(db_path(a.model)), a.query, a.n, a.mode, a.model))
     else:
