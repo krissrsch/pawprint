@@ -1,7 +1,8 @@
-"""pawprint command line: stats, index, search, ask, serve."""
+"""pawprint command line: stats, index, search, ask, serve, recall, mcp."""
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from collections import Counter
@@ -11,7 +12,7 @@ from .ask import AskError, ask
 from .chunk import chunk_turn, without_head
 from .embed import DEFAULT_MODEL
 from .indexer import index
-from .parse import ParseStats, parse_file
+from .parse import ParseStats, parse_file, project_name
 from .expand import expand
 from .rerank import rerank
 from .search import search, smart_search
@@ -94,8 +95,28 @@ def main() -> None:
             x.add_argument("--sources", type=int, default=6, help="how many excerpts go to Claude")
             x.add_argument("--no-expand", action="store_true", help="skip the translation/keyword step")
             x.add_argument("--no-rerank", action="store_true", help="skip the cross-encoder")
+    r = sub.add_parser("recall", help="short dated excerpts for a Claude session, at most ~2,000 tokens")
+    r.add_argument("query")
+    r.add_argument("-n", type=int, default=4)
+    r.add_argument("--project", default=None, help="project folder name (default: the current folder)")
+    r.add_argument("--all", action="store_true", help="search every project")
+    m = sub.add_parser("mcp", help="MCP server on stdio with the recall tool (started by Claude Code)")
+    for x in (r, m):
+        x.add_argument("--model", default=DEFAULT_MODEL)
     a = p.parse_args()
-    if a.cmd == "stats":
+    if a.cmd in ("recall", "mcp"):
+        from .recall import recall
+
+        store = Store(db_path(a.model))
+        here = project_name(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
+        if a.cmd == "recall":
+            sys.stdout.reconfigure(encoding="utf-8")  # excerpts can hold any character; a cp1252 pipe would crash
+            print(recall(store, a.query, a.n, None if a.all else (a.project or here), a.model))
+        else:
+            from .mcp_server import serve_stdio
+
+            serve_stdio(lambda q, n, project: recall(store, q, n, project, a.model), here)
+    elif a.cmd == "stats":
         stats(a.root)
     elif a.cmd == "index":
         remember_exe()
