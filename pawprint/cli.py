@@ -65,6 +65,7 @@ def main() -> None:
             x.add_argument("--port", type=int, default=8765)
             x.add_argument("--root", type=Path, default=DEFAULT_ROOT)
             x.add_argument("--no-index", action="store_true", help="do not bring the index up to date before serving")
+            x.add_argument("--parent-pid", type=int, default=None, help="exit when this process ends (used by Nikki)")
         elif name == "index":
             x.add_argument("--root", type=Path, default=DEFAULT_ROOT)
             x.add_argument("--no-embed", action="store_true", help="keyword index only")
@@ -89,7 +90,7 @@ def main() -> None:
     elif a.cmd == "serve":
         from .web import serve  # imported late so the other commands start fast
 
-        serve(Store(db_path(a.model)), a.model, a.port, None if a.no_index else a.root)
+        serve(Store(db_path(a.model)), a.model, a.port, None if a.no_index else a.root, a.parent_pid)
     elif a.cmd == "search":
         store = Store(db_path(a.model))
         if a.rerank or a.expand:  # the deep pipeline is always hybrid

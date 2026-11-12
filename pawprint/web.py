@@ -93,13 +93,54 @@ def create_app(store: Store, token: str, model: str = DEFAULT_MODEL, answer=ask,
     return app
 
 
-def serve(store: Store, model: str = DEFAULT_MODEL, port: int = 8765, root: Path | None = None) -> None:
+def pid_alive(pid: int) -> bool:
+    """Is a process with this id still running? (os.kill(pid, 0) does not do that on Windows.)"""
+    import os
+
+    if os.name == "nt":
+        import ctypes
+
+        k32 = ctypes.windll.kernel32
+        k32.OpenProcess.restype = ctypes.c_void_p
+        handle = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        code = ctypes.c_ulong()
+        ok = k32.GetExitCodeProcess(ctypes.c_void_p(handle), ctypes.byref(code))
+        k32.CloseHandle(ctypes.c_void_p(handle))
+        return bool(ok) and code.value == 259  # STILL_ACTIVE
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def exit_with(pid: int, every: float = 5.0) -> None:
+    """Stop this process when `pid` is gone: a parent that crashed must not leave the search models in memory."""
+    import os
+    import time
+
+    def watch() -> None:
+        while pid_alive(pid):
+            time.sleep(every)
+        os._exit(0)
+
+    threading.Thread(target=watch, daemon=True).start()
+
+
+def serve(store: Store, model: str = DEFAULT_MODEL, port: int = 8765, root: Path | None = None, parent_pid: int | None = None) -> None:
     """root: transcripts folder to bring the index up to date before serving (None skips it).
     PAWPRINT_TOKEN fixes the token, so a parent process such as Nikki can talk to the server without
-    putting the secret on a command line."""
+    putting the secret on a command line. parent_pid: exit when that process ends."""
     import os
 
     import uvicorn
+
+    if parent_pid:
+        exit_with(parent_pid)
 
     if root is not None:
         from .indexer import index

@@ -127,3 +127,22 @@ def test_serve_updates_the_index_first_and_survives_a_failing_index(monkeypatch,
     calls.clear()
     W.serve(Store(":memory:"), port=1236, root=None)  # --no-index
     assert calls == [("run", 1236)]
+
+
+def test_pid_alive_sees_running_and_finished_processes():
+    import subprocess
+    import sys
+
+    from pawprint.web import pid_alive
+
+    assert pid_alive(__import__("os").getpid())
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()
+    assert not pid_alive(p.pid)
+    sleeper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        assert pid_alive(sleeper.pid)
+    finally:
+        sleeper.kill()
+        sleeper.wait()
+    assert not pid_alive(sleeper.pid)
