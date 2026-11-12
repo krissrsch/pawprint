@@ -81,8 +81,37 @@ Lesewerkzeuge) mit und ohne `recall`, von Hand nachgeprüft:
 - Fazit: Es spart keine Tokens, macht aber Wissen aus Chats erreichbar, zum gleichen Preis. Die Testfragen
   sind schwach (4 von 9 ohne Zusammenhang unbeantwortbar); echte Wiedererkennungsaufgaben wären fairer.
 
-Entscheidung offen (Nutzer): `recall` so lassen und S4 (Paw-Reiter günstiger) angehen, oder zuerst `recall`
-verbessern (schneller Reranker, längere Auszüge, Relevanzschwelle). S5 nicht nötig.
+Entscheidung (Nutzer, 12.11.2026): erst `recall` verbessern, dann S4. Die Trefferquote muss steigen.
+
+## recall verbessert (12.11.2026)
+Gemessen mit `eval/run_recall_variants.py` (48 Fragen, Abrufebene):
+- Stichwörter vom aufrufenden Claude (`keywords`, beide Sprachen) ersetzen die Haiku-Umformulierung kostenlos.
+- Auszug 800 Zeichen um die Fragewörter statt der ersten 600: Die richtige Stelle steht im gezeigten Text in
+  75 % statt 48 % der Fälle; unter den Top 4 in 88 % statt 75 %.
+- Der Reranker liest nur 700 Zeichen um die Fragewörter: 3,2 statt 6,9 s. (Die ersten 700 Zeichen lesen
+  kostete Treffer: 0,58. Verworfen.)
+- Keine harte Relevanzschwelle, nur eine Warnung, wenn der beste Treffer schwach ist.
+- `more=<id>` liest ein abgeschnittenes Stück ganz, mit Nachbarn.
+- Regel: `recall` ergänzt die Dateisuche, ersetzt sie nicht.
+
+In echten Sitzungen (12 Fragen, mit Werkzeug-Protokoll): 6 zu 6. Claude ruft `recall` nur bei 4 von 12 Fragen,
+weil die meisten generierten Fragen aktuellen Code betreffen. Wo es `recall` für Chat-Wissen nutzt, gewinnt es;
+Risiko sind veraltete Chats. Unterschiede von 2 bis 3 Fragen sind zwischen Läufen Rauschen. Für einen fairen Test
+braucht es Wiedererkennungsfragen vom Nutzer selbst.
+
+## S4 (12.11.2026)
+- Antworten im Paw-Reiter werden gespeichert (Tabelle `answers` im Index); dieselbe Frage mit denselben Filtern
+  kostet beim zweiten Mal nichts. Jede Index-Änderung leert den Speicher.
+- Haiku überspringen, wenn Stichwort- und Vektorsuche denselben ersten Treffer haben: nur 13 % der Fragen,
+  Ersparnis zu klein. Nicht gebaut (`eval/run_skip_expand.py`).
+
+## Sicherheitsprüfung (12.11.2026)
+Keine kritischen oder hohen Befunde in Pawprint und Nikki. Behoben: Schwärzungslücken (Basic-Auth, Google,
+SendGrid, Slack/Discord-Webhooks, Azure, Passwörter in Anführungszeichen, `pw=`, „Passwort ist …“), `recall`
+schwärzt erneut und markiert Auszüge als Daten, Modelle in `~/.pawprint/models` statt `%TEMP%`, Ordner/Index nur
+für den Nutzer (POSIX), `secure_delete`, `claude -p` mit `--strict-mcp-config`, Token mindestens 16 Zeichen,
+CI nur mit Leserechten, lokale Pfade aus dem Messskript. Nikki: Testschalter `NIKKI_E2E_PAW` nur noch in der
+Entwicklung, CI nur mit Leserechten.
 
 ## Datenschutz
 Auszüge sind bereits geschwärzt. Was `recall` liefert, landet im Kontext von Claude und damit bei

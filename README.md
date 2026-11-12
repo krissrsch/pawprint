@@ -112,29 +112,34 @@ score them are in `eval/`. Details, model comparison and costs: [eval/RESULTS.md
 [Nikki](https://github.com/krissrsch/nikki), a notch for Windows that runs Claude Code, has a **Paw** tab that asks Pawprint.
 Nikki starts `pawprint serve --port <free port> --parent-pid <Nikki's pid>` with the first question, passes the token
 in `PAWPRINT_TOKEN` (not on the command line), and stops the server after ten idle minutes. If Nikki crashes, the server
-notices that its parent is gone and exits, so the search models do not stay in memory.
+notices that its parent is gone and exits, so the search models do not stay in memory. A question asked again with the
+same filters is answered from a saved answer at no cost; saved answers are dropped whenever the index changes.
 
 ## Use it from a Claude Code session
 
 Claude can look up earlier chats itself, instead of researching again what was already worked out.
-`pawprint mcp` is an MCP server on stdio with one tool, `recall`: dated excerpts (date, project, title, about
-600 characters each), reranked, with no Claude call of its own and capped at about 2,000 tokens per call.
-It searches the current project (the folder name Claude Code runs in) unless `all_projects` is true.
+`pawprint mcp` is an MCP server on stdio with one tool, `recall`: dated excerpts (date, project, title, 800 characters
+around the words of the question), reranked, with no Claude call of its own and capped at about 2,000 tokens per call.
+The calling Claude adds `keywords` in both languages itself, which does what the Haiku rewrite does for `ask`, for free.
+It searches the current project (the folder name Claude Code runs in) unless `all_projects` is true, and warns when
+the best hit scores low.
 
 ```
 claude mcp add --scope user pawprint -e PAWPRINT_THREADS=8 -- /path/to/pawprint/.venv/Scripts/pawprint.exe mcp
-pawprint recall "why did we pick SQLite" -n 4 --all   # the same output on the command line
+pawprint recall "why did we pick SQLite" --keywords "SQLite Postgres database Datenbank" --all   # the same on the command line
 ```
 
-Claude Code starts the server once per session, so the models load once (a few seconds) and a call then takes about
-10 seconds on a CPU, almost all of it in the reranker. The server only reads the index; `pawprint index`, `serve` or
-Nikki keep it current. A line in your `CLAUDE.md` tells Claude when to use it, for example: *before researching
+On 48 test questions the passage that holds the answer is in the excerpts Claude reads 75 % of the time
+(48 % with the first version, which showed the first 600 characters of each chunk). Claude Code starts the server
+once per session, so the models load once (a few seconds); a call then takes about 4 to 7 seconds on a CPU. The
+server only reads the index; `pawprint index`, `serve` or Nikki keep it current. A line in your `CLAUDE.md` tells Claude when to use it, for example: *before researching
 something that was discussed before, ask `recall`; name the date of a hit; if it contradicts the current file, the file wins.*
 
 ## Privacy and security
 
-- Your transcripts are read, never written. The index lives in `~/.pawprint/`, outside the repository.
-- Secrets are redacted before indexing and again before anything is sent to Claude.
+- Your transcripts are read, never written. The index and the downloaded models live in `~/.pawprint/`, outside the repository (on Linux and macOS the folder is `0700` and the index `0600`). Deleted chunks are overwritten in the file, not just unlinked.
+- Secrets are redacted before indexing and again before anything is sent to Claude, by `ask` and by `recall`. After a Pawprint update with new redaction rules, run `pawprint index --reread`.
+- `recall` marks its excerpts as data, not instructions, and `claude -p` runs without tools, settings or MCP servers.
 - `pawprint serve` binds to 127.0.0.1 only. The printed link carries a random token after the `#`, so it never reaches the server log. Requests without the token get 401, and requests with a foreign `Host` header get 403, which blocks DNS-rebinding attacks from other websites.
 - The page inserts excerpts as text, never as HTML, because they are content from old chats.
 - This repository contains only invented test data. A test in CI fails if a real transcript, an index file or a private evaluation file is ever committed.
@@ -143,10 +148,10 @@ something that was discussed before, ask `recall`; name the date of a hit; if it
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `PAWPRINT_HOME` | `~/.pawprint` | Where the index files are stored |
+| `PAWPRINT_HOME` | `~/.pawprint` | Where the index files and the models (`models/`) are stored |
 | `PAWPRINT_MODEL` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | Embedding model ([fastembed](https://github.com/qdrant/fastembed) name); each model gets its own index file |
 | `PAWPRINT_RERANKER` | `jinaai/jina-reranker-v2-base-multilingual` | Cross-encoder used by `ask` and `--rerank` |
-| `PAWPRINT_TOKEN` | random per start | Fixed token for `serve`, for a program that starts Pawprint itself |
+| `PAWPRINT_TOKEN` | random per start | Fixed token for `serve`, for a program that starts Pawprint itself; at least 16 characters |
 | `PAWPRINT_EXPAND_MODEL` | `haiku` | Claude model that rewrites the question before the search; the answer itself always uses `sonnet` |
 | `PAWPRINT_THREADS` | all logical cores | CPU threads for the reranker; on CPUs with efficiency cores the number of performance cores is about twice as fast |
 
@@ -154,8 +159,8 @@ something that was discussed before, ask `recall`; name the date of a hit; if it
 
 - The Claude Code transcript format is not documented and may change. The parser is tolerant, but new formats can hide text until it is updated.
 - Plain search is weakest for questions in the other language than the conversation (0.53 in the top 10), because keyword search cannot match across languages. `ask` and `search --expand` fix most of it (0.88) at the cost of one short `claude -p` call (Haiku).
-- The reranker runs on the CPU and needs 4 to 20 seconds per question, depending on passage length and thread setting; the remaining misses are mostly very specific details deep inside long passages.
-- `recall` always returns its top hits, even when none of them fits; it has no relevance cut-off yet.
+- The reranker runs on the CPU and needs 4 to 20 seconds per question for `ask`, depending on passage length and thread setting (about 3 for `recall`, which lets it read 700 characters per passage); the remaining misses are mostly very specific details deep inside long passages.
+- `recall` always returns its top hits and only warns when the best one scores low; 48 questions are too few for a hard cut-off.
 - The project of a chat is the folder Claude Code ran in. Work on one project started from another folder is filed under that folder, so `recall` may need `all_projects`.
 - Vector search is brute force over all windows (about 14,000 for 4,000 chunks). That is fast up to some hundred thousand windows; beyond that it would need a vector index.
 - The web UI labels are German.
