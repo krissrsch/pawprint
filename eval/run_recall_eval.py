@@ -49,7 +49,9 @@ def standalone(questions: list[str]) -> set[str]:
     return {q for q in questions if cache.get(q)}
 
 
-def pick(n: int) -> list[dict]:
+def pick(n: int, own: str | None = None) -> list[dict]:
+    if own:  # hand-checked questions: no filtering, no sampling
+        return json.load(open(PRIVATE / own, encoding="utf-8"))[:n]
     items = [x for x in json.load(open(PRIVATE / "big_set.json", encoding="utf-8"))
              if x["project"] in FOLDERS and x["style"] in ("paraphrase", "vague") and Path(FOLDERS[x["project"]]).is_dir()]
     keep = standalone([x["q"] for x in items])
@@ -116,13 +118,15 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=10)
     ap.add_argument("--only", choices=("with", "without"))
+    ap.add_argument("--set", help="questions file in eval/private (default: sample from big_set.json)")
+    ap.add_argument("--out", default="recall_results.json", help="results file in eval/private")
     a = ap.parse_args()
-    out_file = PRIVATE / "recall_results.json"
+    out_file = PRIVATE / a.out
     results = json.load(open(out_file, encoding="utf-8")) if out_file.exists() else {}
     with tempfile.TemporaryDirectory() as d:
         empty = str(Path(d) / "empty.json")
         Path(empty).write_text('{"mcpServers":{}}')
-        for i, t in enumerate(pick(a.n)):
+        for i, t in enumerate(pick(a.n, a.set)):
             for variant in ("without", "with"):
                 key = f"{t['hash']}:{t['style']}:{variant}"  # two questions can come from the same passage
                 if (a.only and a.only != variant) or key in results:
