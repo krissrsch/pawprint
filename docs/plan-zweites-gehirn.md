@@ -107,6 +107,12 @@ taugt nicht: Zwei Stücke zur selben Rocko-Zeile überlappen mit 0,02 bis 0,06, 
 Bei der Rocko-Frage steht die neueste Fassung ohnehin auf Platz 1. Stattdessen sagt der Kopf jeder Ausgabe: Bei
 Widerspruch zwischen Treffern gilt der mit dem neueren Datum.
 
+Bedingungsfragen (13.11.2026): 13 Fragen zu Bedingungen und Absprachen. Von Hand bewertet ohne `recall` 10, mit 12.
+Sitzungen fragen `recall` selten (2 von 13), meist zu Recht, weil der Code antwortet. MCP-`instructions` und der Satz
+„vor dem Aufgeben einmal `recall`“ heben das auf 4 von 13. Was bleibt, ist Aufgeben ohne `recall` (2 von 4 Läufen bei
+derselben Frage). Dafür gibt es `pawprint stop-hook`: Er schickt eine aufgebende Antwort einmal zurück. Prüfer jetzt
+Sonnet statt Haiku, alle Läufe neu bewertet.
+
 ## S4 (12.11.2026)
 - Antworten im Paw-Reiter werden gespeichert (Tabelle `answers` im Index); dieselbe Frage mit denselben Filtern
   kostet beim zweiten Mal nichts. Jede Index-Änderung leert den Speicher.

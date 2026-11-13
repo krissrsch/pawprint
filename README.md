@@ -134,6 +134,16 @@ On 48 test questions the passage that holds the answer is in the excerpts Claude
 once per session, so the models load once (a few seconds); a call then takes about 4 to 7 seconds on a CPU. The
 server only reads the index; `pawprint index`, `serve` or Nikki keep it current. A line in your `CLAUDE.md` tells Claude when to use it, for example: *before researching
 something that was discussed before, ask `recall`; name the date of a hit; if it contradicts the current file, the file wins.*
+The server also sends that hint as MCP `instructions`, which Claude Code puts into the system prompt.
+
+On 15 questions about earlier causes and decisions, sessions with `recall` answered 13 and 14 right in two runs,
+against 11 and 12 without, at the same cost; every session that called `recall` was right. Sessions still sometimes
+give up after a few greps without asking it. An optional Stop hook sends such an answer back once ("nicht gefunden",
+"could not find" and similar); a normal answer passes untouched, and the second stop always goes through:
+
+```json
+{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "\"/path/to/pawprint/.venv/Scripts/pawprint.exe\" stop-hook", "timeout": 10}]}]}}
+```
 
 ## Privacy and security
 

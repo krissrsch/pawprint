@@ -284,3 +284,28 @@ quote I read in the chat), run twice with `run_recall_eval.py --set recognition.
   graded two near-identical answers differently; question 6 ("on what condition do bosses use the real cries") was
   never looked up, even with the new tool text, since the code answers the "which cries" half.
 - The new tool text did not measurably change when sessions call recall (5 to 6 of 15).
+
+## recall on questions about conditions and agreements (2026-11-13)
+
+13 hand-picked questions about when something applies, what was agreed or postponed, and what happens if
+(`eval/private/condition.json`). The judge is now Sonnet with "extra details are no error": Haiku had rejected right
+answers such as "dev and editor builds" against "dev builds". All earlier runs were judged again (`--rejudge`):
+recognition questions 10 / 11 without recall, 11 / 12 with it.
+
+| run | right (Sonnet judge) | sessions calling recall | time |
+|---|---|---|---|
+| without recall | 6 | - | 9 s |
+| with recall | 7 | 2 | 10 s |
+| + MCP `instructions` (when to recall, in the system prompt) | 7 | 3 | 10 s |
+| + "before saying you could not find it, recall once" | 8 | 4 | 14 s |
+| + Stop hook (`pawprint stop-hook`) | 7 | 4 | 11 s |
+
+- Graded by hand, the gap is the same as for recognition: 10 without, 12 with recall. Most condition questions are
+  answered by today's code, and sessions rightly grep for them; the judge then marks code that changed since the chat
+  (95 % instead of 100 % of the strongest toy) as wrong.
+- recall wins where the condition lives only in a chat: the agreement on the re-check import, and the test switches
+  that wrote into the real save game (recall also told the session that the proposed fix is not in the code).
+- The miss that stays is giving up: "I found nothing on what a stage looks like at first" without asking recall, in
+  2 of 4 runs. The server instructions did not stop that. The Stop hook does, checked in a forced case (gave up,
+  hook, recall, new answer, stop); in the 13-question run no answer gave up, so it never fired there.
+- Judges still disagree on near-identical answers; differences of one or two questions are noise at this size.
