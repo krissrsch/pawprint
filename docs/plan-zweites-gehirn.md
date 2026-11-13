@@ -102,6 +102,11 @@ zwei Läufe: ohne `recall` 11 und 12 richtig, mit `recall` 13 und 14. Jede Sitzu
 (11 von 11). Kosten und Zeit gleich, mit `recall` weniger Schritte (3,3 statt 5,2). Ein Satz in der Werkzeugbeschreibung
 („auch bei Gründen und Bedingungen fragen, wenn die Dateien den Stand schon zeigen“) hat nichts Messbares geändert.
 
+Veraltete Chats (13.11.2026): Eine Erkennung „neuere Fassung desselben Themas“ über Wortüberlappung der Treffer
+taugt nicht: Zwei Stücke zur selben Rocko-Zeile überlappen mit 0,02 bis 0,06, wie beliebige andere Stücke. Verworfen.
+Bei der Rocko-Frage steht die neueste Fassung ohnehin auf Platz 1. Stattdessen sagt der Kopf jeder Ausgabe: Bei
+Widerspruch zwischen Treffern gilt der mit dem neueren Datum.
+
 ## S4 (12.11.2026)
 - Antworten im Paw-Reiter werden gespeichert (Tabelle `answers` im Index); dieselbe Frage mit denselben Filtern
   kostet beim zweiten Mal nichts. Jede Index-Änderung leert den Speicher.
