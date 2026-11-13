@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import re
 import subprocess
@@ -96,9 +97,11 @@ def session(args: list[str], prompt: str, cwd: str, timeout: int = 900) -> tuple
     return result, tools
 
 
-def run(task: dict, with_recall: bool, empty_mcp: str) -> dict:
+def run(task: dict, with_recall: bool, empty_mcp: str, settings: str | None = None) -> dict:
     args = ["--model", "sonnet", "--tools", TOOLS, "--max-budget-usd", "1.5"]
     args += ["--allowedTools", "mcp__pawprint__recall"] if with_recall else ["--strict-mcp-config", "--mcp-config", empty_mcp]
+    if with_recall and settings:
+        args += ["--settings", settings]
     r, tools = session(args, PROMPT.format(q=task["q"]), FOLDERS[task["project"]])
     u = r.get("usage") or {}
     return {"answer": r.get("result", ""), "error": bool(r.get("is_error")), "cost": r.get("total_cost_usd", 0.0),
@@ -108,10 +111,12 @@ def run(task: dict, with_recall: bool, empty_mcp: str) -> dict:
 
 
 def judge(task: dict, answer: str) -> bool:
+    # Sonnet, not Haiku: Haiku rejected right answers for extra details ("dev and editor builds" against "dev builds")
     q = (f"Frage: {task['q']}\nBelegstelle aus dem Originalchat: {task['evidence']}\nAntwort: {answer}\n\n"
-         "Stimmt die Antwort inhaltlich mit der Belegstelle überein (die entscheidende Tatsache ist genannt und nicht widersprochen)? "
-         "Antworte nur mit JA oder NEIN.")
-    return claude(["--model", "haiku", "--tools", ""], q, None).get("result", "").strip().upper().startswith("JA")
+         "Ist die Antwort richtig? Richtig heißt: Sie nennt die entscheidende Tatsache der Belegstelle oder etwas "
+         "Gleichbedeutendes. Zusätzliche Details, Dateiverweise und Vorbehalte sind kein Fehler. Falsch heißt: Die "
+         "entscheidende Tatsache fehlt, oder die Antwort widerspricht ihr. Antworte nur mit JA oder NEIN.")
+    return claude(["--model", "sonnet", "--tools", ""], q, None).get("result", "").strip().upper().startswith("JA")
 
 
 def main() -> None:
@@ -120,18 +125,32 @@ def main() -> None:
     ap.add_argument("--only", choices=("with", "without"))
     ap.add_argument("--set", help="questions file in eval/private (default: sample from big_set.json)")
     ap.add_argument("--out", default="recall_results.json", help="results file in eval/private")
+    ap.add_argument("--hook", action="store_true", help="sessions with recall also get the pawprint Stop hook")
+    ap.add_argument("--rejudge", action="store_true", help="judge the saved answers again instead of running sessions")
     a = ap.parse_args()
     out_file = PRIVATE / a.out
     results = json.load(open(out_file, encoding="utf-8")) if out_file.exists() else {}
+    if a.rejudge:
+        tasks = {f"{t['hash']}:{t['style']}": t for t in pick(10**6, a.set)}
+        for key, r in results.items():
+            t = tasks.get(key.rsplit(":", 1)[0])
+            if t:
+                r["correct"] = judge(t, r["answer"]) if r["answer"] else False
+        json.dump(results, open(out_file, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     with tempfile.TemporaryDirectory() as d:
         empty = str(Path(d) / "empty.json")
         Path(empty).write_text('{"mcpServers":{}}')
+        settings = None
+        if a.hook:  # the Stop hook that sends a session which gives up back to recall (pawprint/stop_hook.py)
+            exe = (ROOT / ".venv" / ("Scripts" if os.name == "nt" else "bin") / "pawprint").as_posix()
+            settings = str(Path(d) / "hook.json")
+            Path(settings).write_text(json.dumps({"hooks": {"Stop": [{"hooks": [{"type": "command", "command": f'"{exe}" stop-hook'}]}]}}))
         for i, t in enumerate(pick(a.n, a.set)):
             for variant in ("without", "with"):
                 key = f"{t['hash']}:{t['style']}:{variant}"  # two questions can come from the same passage
-                if (a.only and a.only != variant) or key in results:
+                if a.rejudge or (a.only and a.only != variant) or key in results:
                     continue
-                r = run(t, variant == "with", empty)
+                r = run(t, variant == "with", empty, settings)
                 r["correct"] = judge(t, r["answer"]) if r["answer"] else False
                 r["project"], r["q"] = t["project"], t["q"]
                 results[key] = r
