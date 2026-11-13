@@ -37,6 +37,19 @@ TOOL = {
 }
 
 
+# Sent once at the start; Claude Code puts it into the session's system prompt, where it weighs more than the tool text.
+# Measured: without it, sessions asked recall for 2 of 13 questions about conditions and agreements (eval/RESULTS.md).
+INSTRUCTIONS = (
+    "`recall` searches the user's earlier Claude Code chats. Chats hold what the files do not: why something was "
+    "decided, on what condition or until when it applies, what was agreed, postponed or left out on purpose, and what "
+    "caused a bug. When the user asks about such a reason, condition, exception or agreement for something worked on "
+    "before (\"when does X happen\", \"what was agreed for Y\", \"why is Z not done\"), call recall first, with "
+    "keywords, even if the code looks like it answers it: code shows what is there, the chat shows what was meant. "
+    "Then check the hit against the files. Before you answer that you could not find or settle something about the "
+    "user's project, call recall once. Do not call it for plain code lookups or new tasks."
+)
+
+
 def _version() -> str:
     try:
         return version("pawprint")
@@ -54,7 +67,7 @@ def handle(msg: dict, run, here: str, more=None) -> dict | None:
     if method == "initialize":
         # the one tool works the same in every protocol version so far, so take the client's
         result = {"protocolVersion": params.get("protocolVersion") or "2025-06-18", "capabilities": {"tools": {}},
-                  "serverInfo": {"name": "pawprint", "version": _version()}}
+                  "serverInfo": {"name": "pawprint", "version": _version()}, "instructions": INSTRUCTIONS}
     elif method == "ping":
         result = {}
     elif method == "tools/list":
