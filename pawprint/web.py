@@ -8,7 +8,7 @@ import threading
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from .ask import AskError, ask
 from .chunk import without_head
@@ -21,12 +21,14 @@ from .store import Store, text_hash
 PAGE = Path(__file__).with_name("static") / "index.html"
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
+CLAUDE_SLOTS = 2  # at most this many `claude -p` runs at once: each one costs tokens and a process
 
 
 def create_app(store: Store, token: str, model: str = DEFAULT_MODEL, answer=ask, retrieve=None) -> FastAPI:
     """retrieve(q, allowed, lock) -> hits for questions; default is the full pipeline (translation + keywords + reranker)."""
     app = FastAPI(title="Pawprint", docs_url=None, redoc_url=None, openapi_url=None)
     lock = threading.Lock()  # one sqlite connection is shared by the worker threads
+    claude_slots = threading.BoundedSemaphore(CLAUDE_SLOTS)
 
     @app.middleware("http")
     async def guard(request: Request, call_next):
@@ -36,7 +38,7 @@ def create_app(store: Store, token: str, model: str = DEFAULT_MODEL, answer=ask,
         resp = await call_next(request)
         resp.headers["Cache-Control"] = "no-store"
         resp.headers["X-Content-Type-Options"] = "nosniff"
-        resp.headers["Content-Security-Policy"] = "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+        resp.headers.setdefault("Content-Security-Policy", "default-src 'self'")  # the page sets its own, with a nonce
         return resp
 
     def auth(request: Request) -> None:
@@ -67,7 +69,10 @@ def create_app(store: Store, token: str, model: str = DEFAULT_MODEL, answer=ask,
 
     @app.get("/")
     def page():
-        return FileResponse(PAGE, media_type="text/html")
+        # inline script and style only with this request's nonce, so injected markup cannot run
+        nonce = secrets.token_urlsafe(16)
+        csp = f"default-src 'self'; style-src 'nonce-{nonce}'; script-src 'nonce-{nonce}'"
+        return HTMLResponse(PAGE.read_text(encoding="utf-8").replace("__NONCE__", nonce), headers={"Content-Security-Policy": csp})
 
     @app.get("/api/projects", dependencies=[Depends(auth)])
     def projects():
@@ -90,10 +95,14 @@ def create_app(store: Store, token: str, model: str = DEFAULT_MODEL, answer=ask,
             return json.loads(saved)
         allowed = allowed_for(project, since, until)
         hits = [] if allowed == set() else find(q, allowed, lock)  # the slow steps run outside the lock
+        if not claude_slots.acquire(blocking=False):
+            raise HTTPException(429, "Es laufen schon zwei Fragen, bitte kurz warten.")
         try:
             text, used = answer(q, hits)
         except AskError as e:
             raise HTTPException(502, str(e)) from None
+        finally:
+            claude_slots.release()
         # same rule as the CLI: no source list next to "not found"
         result = {"answer": text, "sources": [view(h) for h in hits] if used else []}
         with lock:
@@ -165,4 +174,4 @@ def serve(store: Store, model: str = DEFAULT_MODEL, port: int = 8765, root: Path
         raise SystemExit("PAWPRINT_TOKEN ist zu kurz (mindestens 16 Zeichen).")
     print(f"Pawprint läuft auf http://127.0.0.1:{port}/#token={token}", flush=True)
     print("Den Link nur lokal benutzen. Mit Strg+C beenden.", flush=True)
-    uvicorn.run(create_app(store, token, model), host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run(create_app(store, token, model), host="127.0.0.1", port=port, log_level="warning", access_log=False)  # no URL (and so no question) in any log

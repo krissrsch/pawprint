@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pawprint</title>
-<style>
+<style nonce="__NONCE__">
   :root { --bg:#0e0f12; --card:#17181d; --raised:#1f2027; --line:#2c2e37; --text:#ececf1; --muted:#a3a4b0; --accent:#a9e7bd; --ink:#10261a; --warn:#f5c76b; --blue:#8ab4ff; }
   @media (prefers-color-scheme: light) { :root { --bg:#f6f6f3; --card:#fff; --raised:#f0f0ec; --line:#dcdce2; --text:#1b1c20; --muted:#5a5c66; --accent:#2f8f57; --ink:#fff; --warn:#a86a00; --blue:#2f62c9; } }
   * { box-sizing:border-box; }
@@ -58,7 +58,7 @@
   <h2 id="hHits" hidden>Fundstellen</h2>
   <div id="hits"></div>
 </main>
-<script>
+<script nonce="__NONCE__">
 const $ = id => document.getElementById(id);
 const token = new URLSearchParams(location.hash.slice(1)).get("token") || "";
 history.replaceState(null, "", location.pathname);   // keep the token out of the address bar and history

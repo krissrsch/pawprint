@@ -172,3 +172,36 @@ def test_serve_refuses_a_short_fixed_token(monkeypatch):
     monkeypatch.setenv("PAWPRINT_TOKEN", "short")
     with pytest.raises(SystemExit):
         W.serve(Store(":memory:"), port=1237, root=None)
+
+
+def test_page_scripts_run_only_with_the_nonce_of_that_request(store):
+    c = client(store)
+    a, b = c.get("/"), c.get("/")
+    nonce = a.headers["content-security-policy"].split("'nonce-")[1].split("'")[0]
+    assert f'<script nonce="{nonce}">' in a.text and f'<style nonce="{nonce}">' in a.text
+    assert "unsafe-inline" not in a.headers["content-security-policy"]
+    assert nonce not in b.text  # every request gets its own
+    assert c.get("/api/projects", headers=H).headers["content-security-policy"] == "default-src 'self'"
+
+
+def test_only_two_questions_reach_claude_at_once(store):
+    import threading
+
+    inside, release = threading.Semaphore(0), threading.Event()
+
+    def slow(q, hits):
+        inside.release()
+        release.wait(5)
+        return "ok", []
+
+    c = client(store, answer=slow)
+    done = []
+    ts = [threading.Thread(target=lambda i=i: done.append(c.get("/api/ask", params={"q": f"login {i}"}, headers=H).status_code)) for i in range(2)]
+    for t in ts:
+        t.start()
+    assert inside.acquire(timeout=5) and inside.acquire(timeout=5)  # both are inside the answer step
+    third = c.get("/api/ask", params={"q": "login 3"}, headers=H)
+    release.set()
+    for t in ts:
+        t.join()
+    assert third.status_code == 429 and done == [200, 200]
