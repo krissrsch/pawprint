@@ -1,6 +1,7 @@
 """Answer a question from the best search hits via `claude -p` (logged-in CLI, no API key)."""
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -45,8 +46,18 @@ def build_prompt(question: str, hits: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
+def find_claude() -> str | None:
+    """`claude` from a folder on PATH. On Windows `shutil.which` looks in the current folder first, so a claude.exe
+    dropped into whatever folder pawprint runs in would be started instead; a relative hit is such a file."""
+    for folder in os.environ.get("PATH", "").split(os.pathsep):
+        exe = shutil.which("claude", path=folder) if os.path.isabs(folder) else None
+        if exe and os.path.isabs(exe):
+            return exe
+    return None
+
+
 def run_claude(prompt: str, model: str = "sonnet") -> str:
-    exe = shutil.which("claude")
+    exe = find_claude()
     if not exe:
         raise AskError("Das Programm 'claude' wurde nicht gefunden. Installiere Claude Code oder nutze 'pawprint search'.")
     try:

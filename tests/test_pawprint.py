@@ -143,3 +143,18 @@ def test_redact_shapes_found_in_the_security_review():
         assert secret not in redact(text), text
     for text in ("the password is required", "Das Passwort ist falsch.", "a pwa: progressive web app", "upwards: yes"):
         assert redact(text) == text, text
+
+
+def test_claude_is_never_taken_from_the_current_folder(monkeypatch, tmp_path):
+    import os
+
+    from pawprint import ask
+
+    here, real = tmp_path / "bin", tmp_path / "real"
+    here.mkdir(), real.mkdir()
+    monkeypatch.setenv("PATH", os.pathsep.join(["relative", str(here), str(real)]))
+    # Windows: which() answers ".\claude.exe" for a file in the current folder, whatever path it was given
+    monkeypatch.setattr(ask.shutil, "which", lambda cmd, path=None: ".\claude.exe" if path == str(here) else (str(real / "claude.exe") if path == str(real) else None))
+    assert ask.find_claude() == str(real / "claude.exe")
+    monkeypatch.setenv("PATH", "relative")
+    assert ask.find_claude() is None

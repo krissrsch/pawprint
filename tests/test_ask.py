@@ -26,7 +26,7 @@ def test_ask_returns_answer_and_source_labels():
 
 
 def test_missing_claude_gives_clear_error(monkeypatch):
-    monkeypatch.setattr(A.shutil, "which", lambda _: None)
+    monkeypatch.setattr(A, "find_claude", lambda: None)
     with pytest.raises(A.AskError, match="nicht gefunden"):
         A.run_claude("x")
 
