@@ -266,3 +266,21 @@ checked by hand:
   reported that version, while the file held a newer one.
 - Several generated questions quote code that has changed since; a correct answer from today's code is graded wrong
   against the old quote. A fairer test needs recognition questions written by the user.
+
+## recall on recognition questions (2026-11-13)
+
+15 hand-picked questions about causes and decisions from four projects (`eval/private/recognition.json`, each with a
+quote I read in the chat), run twice with `run_recall_eval.py --set recognition.json`:
+
+| run | without recall | with recall | sessions calling recall |
+|---|---|---|---|
+| 1 | 11 | 13 | 5 |
+| 2 (tool text: "call it for reasons and agreed conditions even when the files show the state") | 12 | 14 | 6 |
+
+- Every session that called recall answered right (11 of 11). The cause of the see-through floor was found by 2 of 2
+  sessions with recall and 1 of 2 without; the bug with re-checks and an unclear WC by 2 of 2 with and 0 of 2 without.
+- Cost and time are the same (about $0.05 and 11 s a question); sessions with recall need fewer turns (3.3 vs 5.2).
+- The two misses are not recall's fault: question 3 asks about behaviour the code has changed since, and Haiku
+  graded two near-identical answers differently; question 6 ("on what condition do bosses use the real cries") was
+  never looked up, even with the new tool text, since the code answers the "which cries" half.
+- The new tool text did not measurably change when sessions call recall (5 to 6 of 15).

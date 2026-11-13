@@ -94,10 +94,13 @@ Gemessen mit `eval/run_recall_variants.py` (48 Fragen, Abrufebene):
 - `more=<id>` liest ein abgeschnittenes Stück ganz, mit Nachbarn.
 - Regel: `recall` ergänzt die Dateisuche, ersetzt sie nicht.
 
-In echten Sitzungen (12 Fragen, mit Werkzeug-Protokoll): 6 zu 6. Claude ruft `recall` nur bei 4 von 12 Fragen,
-weil die meisten generierten Fragen aktuellen Code betreffen. Wo es `recall` für Chat-Wissen nutzt, gewinnt es;
-Risiko sind veraltete Chats. Unterschiede von 2 bis 3 Fragen sind zwischen Läufen Rauschen. Für einen fairen Test
-braucht es Wiedererkennungsfragen vom Nutzer selbst.
+In echten Sitzungen (12 generierte Fragen, mit Werkzeug-Protokoll): 6 zu 6. Claude ruft `recall` nur bei 4 von 12 Fragen,
+weil die meisten generierten Fragen aktuellen Code betreffen. Risiko sind veraltete Chats.
+
+Wiedererkennungsfragen (13.11.2026): 15 von Hand ausgewählte Fragen zu Ursachen und Entscheidungen aus vier Projekten,
+zwei Läufe: ohne `recall` 11 und 12 richtig, mit `recall` 13 und 14. Jede Sitzung, die `recall` aufrief, lag richtig
+(11 von 11). Kosten und Zeit gleich, mit `recall` weniger Schritte (3,3 statt 5,2). Ein Satz in der Werkzeugbeschreibung
+(„auch bei Gründen und Bedingungen fragen, wenn die Dateien den Stand schon zeigen“) hat nichts Messbares geändert.
 
 ## S4 (12.11.2026)
 - Antworten im Paw-Reiter werden gespeichert (Tabelle `answers` im Index); dieselbe Frage mit denselben Filtern
