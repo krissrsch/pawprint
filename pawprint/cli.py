@@ -105,8 +105,13 @@ def main() -> None:
     m = sub.add_parser("mcp", help="MCP server on stdio with the recall tool (started by Claude Code)")
     for x in (r, m):
         x.add_argument("--model", default=DEFAULT_MODEL)
+    sub.add_parser("stop-hook", help="Claude Code Stop hook: send a session that gives up back to ask recall once")
     a = p.parse_args()
-    if a.cmd in ("recall", "mcp"):
+    if a.cmd == "stop-hook":
+        from .stop_hook import main as stop_hook
+
+        stop_hook()
+    elif a.cmd in ("recall", "mcp"):
         from .recall import more, recall
 
         store = Store(db_path(a.model))

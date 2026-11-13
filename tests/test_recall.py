@@ -68,6 +68,7 @@ def test_mcp_handshake_list_and_call():
 
     init = handle(rpc("initialize", protocolVersion="2025-06-18", capabilities={}), run, "alpha")
     assert init["result"]["protocolVersion"] == "2025-06-18" and "tools" in init["result"]["capabilities"]
+    assert "condition" in init["result"]["instructions"]  # the hint for when to call recall goes into the system prompt
     assert handle({"jsonrpc": "2.0", "method": "notifications/initialized"}, run, "alpha") is None
     assert handle(rpc("tools/list"), run, "alpha")["result"]["tools"] == [TOOL]
 
@@ -147,3 +148,27 @@ def test_mcp_more_reads_a_passage_without_a_query():
     got = handle(rpc("tools/call", name="recall", arguments={"more": 42}), lambda *a: "search", "a", more=lambda i: f"stück {i}")
     assert got["result"]["content"][0]["text"] == "stück 42"
     assert handle(rpc("tools/call", name="recall", arguments={"more": True}), lambda *a: "search", "a", more=lambda i: "x")["result"]["isError"]
+
+
+def test_stop_hook_sends_a_giving_up_answer_back_once():
+    from pawprint.stop_hook import decide
+
+    gave_up = "Zum Aussehen beim ersten Besuch habe ich nichts gefunden, das kann ich also nicht sagen."
+    assert decide({"stop_hook_active": False, "last_assistant_message": gave_up})["decision"] == "block"
+    assert decide({"stop_hook_active": True, "last_assistant_message": gave_up}) is None  # second stop: let it end
+    for fine in ("Die Datei liegt in `src/app.ts:12`. Nicht geprüft habe ich den Build.", "", None):
+        assert decide({"stop_hook_active": False, "last_assistant_message": fine}) is None
+    assert decide({"last_assistant_message": "I could not find where this is set."})["decision"] == "block"
+
+
+def test_stop_hook_command_reads_stdin_and_answers_json():
+    import subprocess
+
+    def run(event):
+        p = subprocess.run([sys.executable, "-m", "pawprint.cli", "stop-hook"], input=json.dumps(event),
+                           capture_output=True, text=True, encoding="utf-8", timeout=60)
+        assert p.returncode == 0, p.stderr
+        return p.stdout
+
+    assert json.loads(run({"stop_hook_active": False, "last_assistant_message": "Das weiß ich nicht."}))["decision"] == "block"
+    assert run({"stop_hook_active": False, "last_assistant_message": "Erledigt."}) == ""
