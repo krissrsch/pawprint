@@ -23,7 +23,7 @@ Was du davon schon hast: die globale `CLAUDE.md` und das Memory-Verzeichnis sind
 Master-Prompt. Den Teil muss man nicht nachbauen.
 
 Was fehlt und das Video nicht liefert: der Abruf auf Anfrage. Ein fester Prompt kann nur Kurzes
-enthalten. Alles andere (warum SQLite, wie der Kanto-Stage-Fix lief, welche Befehle damals
+enthalten. Alles andere (warum SQLite, wie ein bestimmter Bugfix lief, welche Befehle damals
 funktionierten) steht in tausenden Chunks, die nur bei Bedarf geladen werden sollen. Das ist
 Pawprints Stärke. Die beiden Ansätze ergänzen sich: Master-Prompt für das Stabile, Pawprint für das
 Konkrete.
@@ -35,7 +35,7 @@ Konkrete.
   bringt es nichts. Ob es netto Tokens spart, ist nicht gemessen. Ein Treffer kostet etwa 1.500
   Tokens; er lohnt sich, wenn er eine Recherche von mehreren tausend Tokens ersetzt.
 - **Realistisch:** ja mit zwei Vorbehalten. (1) Alte Chats können falsch oder überholt sein (Beispiel:
-  der ROM-Fall, in dem der Chat sich selbst korrigierte). Treffer müssen Datum und Projekt zeigen und
+  ein Fall, in dem der Chat sich selbst korrigierte). Treffer müssen Datum und Projekt zeigen und
   gelten als Hinweis, nicht als Wahrheit. (2) Das Suchmodell braucht einige GB Speicher und Sekunden
   zum Laden, deshalb darf es nicht bei jedem Aufruf neu starten.
 

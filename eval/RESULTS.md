@@ -46,9 +46,9 @@ Recall improved on the hard set, MRR dropped a little. Ten questions cannot sepa
 | Answerable (7) | 6 correct, all with citations, 1 wrongly refused |
 | Unanswerable (4: cake recipe, capital of Australia, bank balance, a password) | 4 refused, none answered |
 
-The wrongly refused question was vague ("the decrypted Pokémon file"); the passage that holds the
-answer is a heap-offset dump that shares no words with it, and it sits outside the top 6. The same
-question with the name in it ("Floink level 5") ranks it first. Claude's answer is not deterministic:
+The wrongly refused question was vague (it named a file only by what had been done to it); the passage that
+holds the answer is a raw data dump that shares no words with it, and it sits outside the top 6. The same
+question with the specific name in it ranks it first. Claude's answer is not deterministic:
 one borderline question (an excerpt that quotes a URL as part of a task, without a checked result)
 flipped between refusing and answering on repeated runs, so it was dropped from the set.
 
@@ -162,8 +162,8 @@ through the real `ask` pipeline and lets Claude compare each answer with the sou
 | 1 | 31 of 35 | 34 of 35: three answers were right but quoted more than the grader's snippet |
 | 2 | 34 of 35 | 35 of 35 |
 
-The one answer graded wrong in both runs is the best one: the chat said "a new tunnel loses the ROM" and
-corrected itself an hour later ("Ein neuer Tunnel löscht das ROM nicht"); Pawprint found both passages and
+The one answer graded wrong in both runs is the best one: the chat stated a claim and
+corrected itself an hour later; Pawprint found both passages and
 answered with the correction. The special questions passed in both runs: no answer invented for the three
 unanswerable ones, the secret never printed, the filter kept to the project and dates, 10-21 s per question.
 The user checked the first 5 by hand; all were right.
@@ -281,8 +281,8 @@ quote I read in the chat), run twice with `run_recall_eval.py --set recognition.
   sessions with recall and 1 of 2 without; the bug with re-checks and an unclear WC by 2 of 2 with and 0 of 2 without.
 - Cost and time are the same (about $0.05 and 11 s a question); sessions with recall need fewer turns (3.3 vs 5.2).
 - The two misses are not recall's fault: question 3 asks about behaviour the code has changed since, and Haiku
-  graded two near-identical answers differently; question 6 ("on what condition do bosses use the real cries") was
-  never looked up, even with the new tool text, since the code answers the "which cries" half.
+  graded two near-identical answers differently; question 6 (on what condition a feature is used) was
+  never looked up, even with the new tool text, since the code answers the "which one" half.
 - The new tool text did not measurably change when sessions call recall (5 to 6 of 15).
 
 ## recall on questions about conditions and agreements (2026-11-13)
@@ -305,7 +305,7 @@ recognition questions 10 / 11 without recall, 11 / 12 with it.
   (95 % instead of 100 % of the strongest toy) as wrong.
 - recall wins where the condition lives only in a chat: the agreement on the re-check import, and the test switches
   that wrote into the real save game (recall also told the session that the proposed fix is not in the code).
-- The miss that stays is giving up: "I found nothing on what a stage looks like at first" without asking recall, in
+- The miss that stays is giving up: "I found nothing on how it looks at first" without asking recall, in
   2 of 4 runs. The server instructions did not stop that. The Stop hook does, checked in a forced case (gave up,
   hook, recall, new answer, stop); in the 13-question run no answer gave up, so it never fired there.
 - Judges still disagree on near-identical answers; differences of one or two questions are noise at this size.

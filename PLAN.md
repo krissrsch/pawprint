@@ -6,7 +6,7 @@ Stand 12.11.2026. Lokale Suche und Fragen über die eigenen Claude-Code-Gespräc
 
 ## Ziel
 
-Die Transkripte in `~/.claude/projects/` (bei dir: 2,5 GB, 239 Sitzungen, 50 Projektordner) durchsuchbar machen und Fragen in ganzen Sätzen beantworten, jede Antwort mit Quellen („Sitzung vom 10.11., Projekt notch-nikki“).
+Die Transkripte in `~/.claude/projects/` durchsuchbar machen und Fragen in ganzen Sätzen beantworten, jede Antwort mit Quellen („Sitzung vom 10.11., Projekt notch-nikki“).
 
 - **Nutzen für dich:** eigene Entscheidungen und Lösungen wiederfinden, statt sie neu zu erklären.
 - **Nutzen zum Vorstellen:** ein echtes RAG-Projekt mit realen Daten: Parsing, Chunking, Embeddings, Hybrid-Suche, Quellen, Auswertung mit Testfragen. Dazu später eine Karte in Nikki.
@@ -19,13 +19,13 @@ Die Transkripte in `~/.claude/projects/` (bei dir: 2,5 GB, 239 Sitzungen, 50 Pro
 | Sprache | Python für den Kern; Nikki bekommt später nur einen schmalen Anschluss |
 | Antworten | Suche und Embeddings lokal; fertige Antwort über `claude -p` mit deinem Abo, kein API-Key; es gehen nur die gefundenen Textstellen raus |
 | Läuft wo | **neben Nikki** als eigener lokaler Dienst auf 127.0.0.1 mit Token, nicht in Nikki. Nikki bekommt später nur eine Karte „Frag deine Geschichte“, die ihn aufruft; läuft er nicht, zeigt sie einen Hinweis mit „Starten“ |
-| Ort | `C:\Programmieren\Tools\pawprint`, öffentliches GitHub-Repo `pawprint`, MIT |
+| Ort | eigener Projektordner, öffentliches GitHub-Repo `pawprint`, MIT |
 
 ## Was ich schon geprüft habe
 
-- Zeilen in den Transkripten sind JSON mit `type`: `user`, `assistant` (Text in `message`), dazu viele andere Arten (`attachment`, `api-request`, `queue-operation` …). Der Großteil der 2,5 GB ist kein Gesprächstext, sondern Werkzeug-Ausgaben und API-Blobs. Die eigentliche Textmenge ist deutlich kleiner; sie wird in M1 gemessen.
+- Zeilen in den Transkripten sind JSON mit `type`: `user`, `assistant` (Text in `message`), dazu viele andere Arten (`attachment`, `api-request`, `queue-operation` …). Der Großteil der Daten ist kein Gesprächstext, sondern Werkzeug-Ausgaben und API-Blobs. Die eigentliche Textmenge ist deutlich kleiner; sie wird in M1 gemessen.
 - Pro Zeile stehen `sessionId`, `cwd`, `gitBranch`, `timestamp`; Sitzungstitel stehen als `ai-title`-Zeilen. Daraus kommen die Metadaten für die Quellenangaben.
-- Python 3.13 ist da, aber keine ML-Bibliotheken. Eine RTX 4060 ist da (nur nötig, wenn ein größeres Embedding-Modell gewählt wird).
+- Python 3.13 ist da, aber keine ML-Bibliotheken. Eine GPU wäre nur nötig, wenn ein größeres Embedding-Modell gewählt wird.
 - Das Format ist nicht dokumentiert und kann sich ändern: der Parser muss tolerant sein und unbekannte Zeilen überspringen.
 
 ## Aufbau
@@ -61,7 +61,7 @@ pawprint/
 
 | # | Ergebnis | Fertig, wenn |
 |---|---|---|
-| M1 | Parser, Schwärzen, Chunking, Messung der Textmenge | alle 239 Sitzungen laufen ohne Absturz durch; Zahlen zu Turns, Zeichen, Chunks; Unit-Tests grün |
+| M1 | Parser, Schwärzen, Chunking, Messung der Textmenge | alle Sitzungen laufen ohne Absturz durch; Zahlen zu Turns, Zeichen, Chunks; Unit-Tests grün |
 | M2 | Embeddings, Speicher, Hybrid-Suche, `pawprint search` | 30 Testfragen aus echten Sitzungen: Recall@5 gemessen, Modell gewählt; zweiter Indexlauf in Sekunden |
 | M3 | `pawprint ask` mit Quellen | Antworten zitieren Quellen, die stimmen; bei fehlender Information ehrliches „nicht gefunden“ |
 | M4 | Oberfläche auf 127.0.0.1 | Suchfeld, Antwort mit anklickbaren Quellen, Filter nach Projekt und Zeitraum |
