@@ -7,12 +7,17 @@ MASK = "[REDACTED]"
 
 # (pattern, replacement). Order matters: specific token shapes first.
 _RULES: list[tuple[re.Pattern, str]] = [
-    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.S), MASK),
+    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----.*?-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----", re.S), MASK),
+    # a key pasted only in part (no END line): mask the header and every key-shaped line after it
+    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----(?:\r?\n[ \t]*[A-Za-z0-9+/=:\-]+[ \t]*)*"), MASK),
     (re.compile(r"\bsk-ant-[A-Za-z0-9_\-]{10,}"), MASK),
     (re.compile(r"\bsk-[A-Za-z0-9_\-]{20,}"), MASK),
     (re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}"), MASK),
     (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{30,}"), MASK),
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), MASK),
+    (re.compile(r"\b[MNO][A-Za-z\d_\-]{23,27}\.[A-Za-z\d_\-]{6}\.[A-Za-z\d_\-]{27,40}\b"), MASK),  # Discord bot token
+    (re.compile(r"\b\d{8,10}:AA[A-Za-z0-9_\-]{30,}\b"), MASK),  # Telegram bot token
+    (re.compile(r"\bSK[0-9a-fA-F]{32}\b"), MASK),  # Twilio API key
     (re.compile(r"\bAIza[0-9A-Za-z_\-]{30,}"), MASK),
     (re.compile(r"\bxox[abprs]-[A-Za-z0-9\-]{10,}"), MASK),
     (re.compile(r"\bnfp_[A-Za-z0-9]{20,}"), MASK),
@@ -29,6 +34,11 @@ _RULES: list[tuple[re.Pattern, str]] = [
     (re.compile(r"(?i)(hooks\.slack\.com/services/)\S+"), r"\1" + MASK),
     (re.compile(r"(?i)(discord(?:app)?\.com/api/webhooks/)\S+"), r"\1" + MASK),
     (re.compile(r"(?i)(AccountKey=)[^;\s]+"), r"\1" + MASK),  # Azure connection strings
+    (re.compile(r"(?im)^([ \t]*(?:set-)?cookie:[ \t]*).+$"), r"\1" + MASK),  # session cookies in pasted headers
+    # passwords on a command line: mysql -pSECRET, sshpass -p SECRET, --password SECRET
+    (re.compile(r"(?i)(\bmysql(?:dump|admin|sh)?\b[^\n]*?\s-p)(?=[^\s-])\S+"), r"\1" + MASK),
+    (re.compile(r"(?i)(\bsshpass\s+-p\s*)\S+"), r"\1" + MASK),
+    (re.compile(r"(?i)(--pass(?:word)?[ \t]+)(?!-)\S+"), r"\1" + MASK),
     # a quoted password may contain spaces: mask up to the closing quote
     (re.compile(r"(?i)(\b[A-Za-z0-9_\-]*(?:password|passwd|passwort|kennwort|pwd)[A-Za-z0-9_\-]*[\"']?\s*[:=]\s*)([\"'])[^\"'\n]+\2"),
      r"\1\2" + MASK + r"\2"),

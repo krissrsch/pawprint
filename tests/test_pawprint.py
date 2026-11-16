@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pawprint.chunk import chunk_turn
 from pawprint.parse import ParseStats, parse_file
-from pawprint.redact import redact
+from pawprint.redact import MASK, redact
 
 FIX = Path(__file__).parent / "fixtures" / "invented.jsonl"
 
@@ -158,3 +158,18 @@ def test_claude_is_never_taken_from_the_current_folder(monkeypatch, tmp_path):
     assert ask.find_claude() == str(real / "claude.exe")
     monkeypatch.setenv("PATH", "relative")
     assert ask.find_claude() is None
+
+
+def test_redact_keys_tokens_cookies_and_command_line_passwords():
+    assert "abcDEF123" not in redact("-----BEGIN PGP PRIVATE KEY BLOCK-----\nabcDEF123\n-----END PGP PRIVATE KEY BLOCK-----")
+    cut_off = redact("-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\nAAAAB3NzaC1yc2E\n\nText danach")
+    assert "b3Blbn" not in cut_off and "AAAAB3" not in cut_off and cut_off.endswith("Text danach")  # no END line
+    for secret in ("MTA" + "x" * 21 + ".Gabcde." + "y" * 38, "123456789:AAH" + "b" * 32, "SK" + "a1" * 16):
+        assert redact(f"token {secret} hier") == f"token {MASK} hier"
+    assert redact("Cookie: session=4f9a1c2e8b7d6a5f") == f"Cookie: {MASK}"
+    assert redact("Set-Cookie: sid=s%3AabcDEF; HttpOnly") == f"Set-Cookie: {MASK}"
+    assert redact("mysql -u root -pS3cretPw db") == f"mysql -u root -p{MASK} db"
+    assert redact("sshpass -p Hunter2xyz ssh x") == f"sshpass -p {MASK} ssh x"
+    assert redact("tool --password S3cret! --user x") == f"tool --password {MASK} --user x"
+    for plain in ("mysql -u root -p dbname", "Cookie-Banner entfernt", "manage.py --password-reset", "SKIP_TESTS=1"):
+        assert redact(plain) == plain
