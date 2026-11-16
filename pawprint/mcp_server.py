@@ -57,9 +57,10 @@ def _version() -> str:
         return "0"
 
 
-def handle(msg: dict, run, here: str, more=None) -> dict | None:
+def handle(msg: dict, run, here: str, more=None, own_project_only: bool = False) -> dict | None:
     """One JSON-RPC message -> its response (None for notifications).
-    run(query, n, project, keywords) -> text; more(chunk_id) -> text."""
+    run(query, n, project, keywords) -> text; more(chunk_id, project) -> text.
+    own_project_only: ignore all_projects and project, so a session can only ever read the chats of its own folder."""
     if "id" not in msg:
         return None
     mid, method = msg["id"], msg.get("method")
@@ -75,16 +76,19 @@ def handle(msg: dict, run, here: str, more=None) -> dict | None:
     elif method == "tools/call" and params.get("name") == "recall":
         args = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
         q, n, cid = args.get("query"), args.get("n", 4), args.get("more")
+        if own_project_only:
+            project = here or None
+        else:
+            project = None if args.get("all_projects") is True else (args.get("project") or here or None)
         if more and isinstance(cid, int) and not isinstance(cid, bool):
             try:
-                return _text(mid, more(cid))
+                return _text(mid, more(cid, project))  # the same scope as a search: no reading around it by id
             except Exception as e:
                 return _text(mid, f"Lesen fehlgeschlagen: {type(e).__name__}: {e}", error=True)
         if not isinstance(q, str) or not q.strip():
             return _text(mid, "query fehlt.", error=True)
         if not isinstance(n, int) or isinstance(n, bool):
             n = 4
-        project = None if args.get("all_projects") is True else (args.get("project") or here or None)
         kw = args.get("keywords")
         kw = kw.strip()[:500] if isinstance(kw, str) else ""
         try:
@@ -106,7 +110,7 @@ def _error(mid, code: int, message: str) -> dict:
     return {"jsonrpc": "2.0", "id": mid, "error": {"code": code, "message": message}}
 
 
-def serve_stdio(run, here: str, inp=None, out=None, more=None) -> None:
+def serve_stdio(run, here: str, inp=None, out=None, more=None, own_project_only: bool = False) -> None:
     """Newline-delimited JSON-RPC on stdin/stdout until stdin closes."""
     if inp is None:
         sys.stdin.reconfigure(encoding="utf-8")  # Windows pipes default to the ANSI code page
@@ -120,7 +124,7 @@ def serve_stdio(run, here: str, inp=None, out=None, more=None) -> None:
             continue
         try:
             msg = json.loads(line)
-            resp = handle(msg, run, here, more) if isinstance(msg, dict) else _error(None, -32600, "invalid request")
+            resp = handle(msg, run, here, more, own_project_only) if isinstance(msg, dict) else _error(None, -32600, "invalid request")
         except ValueError:
             resp = _error(None, -32700, "parse error")
         if resp is not None:

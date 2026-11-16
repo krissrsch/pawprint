@@ -145,9 +145,26 @@ def test_more_returns_the_whole_chunk_and_its_neighbours_from_the_same_file():
 
 
 def test_mcp_more_reads_a_passage_without_a_query():
-    got = handle(rpc("tools/call", name="recall", arguments={"more": 42}), lambda *a: "search", "a", more=lambda i: f"stück {i}")
-    assert got["result"]["content"][0]["text"] == "stück 42"
-    assert handle(rpc("tools/call", name="recall", arguments={"more": True}), lambda *a: "search", "a", more=lambda i: "x")["result"]["isError"]
+    got = handle(rpc("tools/call", name="recall", arguments={"more": 42}), lambda *a: "search", "a", more=lambda i, p: f"stück {i} in {p}")
+    assert got["result"]["content"][0]["text"] == "stück 42 in a"  # in the session's own project, like a search
+    assert handle(rpc("tools/call", name="recall", arguments={"more": True}), lambda *a: "search", "a", more=lambda i, p: "x")["result"]["isError"]
+
+
+def test_more_cannot_read_another_project_by_counting_ids():
+    s = Store(":memory:")
+    s.replace_file("a", 1, 1.0, [chunk("eigenes gespräch", project="alpha")])
+    s.replace_file("b", 1, 1.0, [chunk("geheimes gespräch", project="beta")])
+    other = s.db.execute("SELECT id FROM chunks WHERE project='beta'").fetchone()[0]
+    assert "geheimes" not in more(s, other, "alpha") and "Kein Stück" in more(s, other, "alpha")
+    assert "geheimes" in more(s, other, "beta") and "geheimes" in more(s, other)  # all_projects: no filter
+
+
+def test_mcp_own_project_only_ignores_all_projects_and_project():
+    seen = []
+    run = lambda q, n, project, kw: seen.append(project) or "ok"
+    for args in ({"query": "x", "all_projects": True}, {"query": "x", "project": "beta"}, {"more": 7, "all_projects": True}):
+        handle(rpc("tools/call", name="recall", arguments=args), run, "alpha", more=lambda i, p: seen.append(p) or "ok", own_project_only=True)
+    assert seen == ["alpha", "alpha", "alpha"]
 
 
 def test_stop_hook_sends_a_giving_up_answer_back_once():

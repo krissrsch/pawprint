@@ -82,11 +82,13 @@ def recall(store: Store, query: str, n: int = 4, project: str | None = None, mod
     return out + "\n\nAuszug abgeschnitten und wichtig? more=<id> liefert das ganze Stück und das folgende."
 
 
-def more(store: Store, chunk_id: int) -> str:
-    """The whole chunk `chunk_id` and its neighbours in the same transcript, for an excerpt that was cut off."""
-    row = store.db.execute("SELECT file FROM chunks WHERE id=?", (chunk_id,)).fetchone()
-    if not row:
-        return f"Kein Stück mit id {chunk_id}."
+def more(store: Store, chunk_id: int, project: str | None = None) -> str:
+    """The whole chunk `chunk_id` and its neighbours in the same transcript, for an excerpt that was cut off.
+    project: only a chunk of this project. Ids are consecutive, so without the check a session could read every
+    chat of every project by counting up, even one told to stay in its own project."""
+    row = store.db.execute("SELECT file, project FROM chunks WHERE id=?", (chunk_id,)).fetchone()
+    if not row or (project and row[1] != project):
+        return f"Kein Stück mit id {chunk_id}" + (f" im Projekt '{project}'." if project else ".")
     ids = [r[0] for r in store.db.execute(
         "SELECT id FROM chunks WHERE file=? AND id BETWEEN ? AND ? ORDER BY id", (row[0], chunk_id - 1, chunk_id + 1))]
     got = store.get(ids)

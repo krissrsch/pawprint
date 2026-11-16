@@ -150,6 +150,7 @@ give up after a few greps without asking it. An optional Stop hook sends such an
 - Your transcripts are read, never written. The index and the downloaded models live in `~/.pawprint/`, outside the repository (on Linux and macOS the folder is `0700` and the index `0600`). Deleted chunks are overwritten in the file, not just unlinked.
 - Secrets are redacted before indexing and again before anything is sent to Claude, by `ask` and by `recall`. After a Pawprint update with new redaction rules, run `pawprint index --reread`.
 - `recall` marks its excerpts as data, not instructions, and `claude -p` runs without tools, settings or MCP servers.
+- `recall` reads a passage by id (`more`) only inside the project it searches, so counting up ids does not reach other projects. A session that works on untrusted code can be held to its own project with `PAWPRINT_MCP_SCOPE=project`.
 - `pawprint serve` binds to 127.0.0.1 only. The printed link carries a random token after the `#`, so it never reaches the server log. Requests without the token get 401, and requests with a foreign `Host` header get 403, which blocks DNS-rebinding attacks from other websites.
 - The page inserts excerpts as text, never as HTML, because they are content from old chats.
 - This repository contains only invented test data. A test in CI fails if a real transcript, an index file or a private evaluation file is ever committed.
@@ -164,6 +165,7 @@ give up after a few greps without asking it. An optional Stop hook sends such an
 | `PAWPRINT_TOKEN` | random per start | Fixed token for `serve`, for a program that starts Pawprint itself; at least 16 characters |
 | `PAWPRINT_EXPAND_MODEL` | `haiku` | Claude model that rewrites the question before the search; the answer itself always uses `sonnet` |
 | `PAWPRINT_THREADS` | all logical cores | CPU threads for the reranker; on CPUs with efficiency cores the number of performance cores is about twice as fast |
+| `PAWPRINT_MCP_SCOPE`   | (empty)                                                       | `project`: `recall` only ever reads the chats of the folder the session runs in, whatever it asks for (`all_projects`, `project` and `more` included) |
 
 ## Limitations
 

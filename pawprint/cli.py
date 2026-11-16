@@ -127,7 +127,10 @@ def main() -> None:
         else:
             from .mcp_server import serve_stdio
 
-            serve_stdio(lambda q, n, project, kw: recall(store, q, n, project, a.model, kw), here, more=lambda i: more(store, i))
+            # PAWPRINT_MCP_SCOPE=project: a session sees only its own project's chats, whatever it asks for
+            own = os.environ.get("PAWPRINT_MCP_SCOPE", "").strip().lower() == "project"
+            serve_stdio(lambda q, n, project, kw: recall(store, q, n, project, a.model, kw), here,
+                        more=lambda i, project: more(store, i, project), own_project_only=own)
     elif a.cmd == "stats":
         stats(a.root)
     elif a.cmd == "index":
