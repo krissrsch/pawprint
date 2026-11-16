@@ -45,7 +45,12 @@ def text_hash(t: str) -> str:
 class Store:
     def __init__(self, path: Path | str):
         if str(path) != ":memory:":
-            Path(path).parent.mkdir(mode=0o700, parents=True, exist_ok=True)  # the index holds chat text
+            folder = Path(path).parent
+            folder.mkdir(mode=0o700, parents=True, exist_ok=True)  # the index holds chat text
+            # mkdir's mode only counts for a new folder; the journal and -wal files SQLite creates next to the index get
+            # the umask, so the folder itself must keep others out (never the home folder, if someone puts it there)
+            if os.name != "nt" and folder.resolve() != Path.home().resolve():
+                os.chmod(folder, 0o700)
         self.db = sqlite3.connect(str(path), check_same_thread=False)  # the web server reads from worker threads
         if str(path) != ":memory:" and os.name != "nt":  # Windows: the profile folder's ACL already limits it to the user
             os.chmod(path, 0o600)

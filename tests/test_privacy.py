@@ -39,3 +39,20 @@ def test_tracked_files_contain_no_real_transcript_lines():
         if REAL_TRANSCRIPT.search(f.read_text(encoding="utf-8", errors="ignore")):
             hits.append(p)
     assert hits == [], f"looks like a real transcript: {hits}"
+
+
+def test_an_existing_index_folder_is_tightened_to_owner_only(tmp_path):
+    import os
+    import stat
+
+    import pytest
+
+    from pawprint.store import Store
+
+    if os.name == "nt":
+        pytest.skip("Windows uses the profile folder's ACL")
+    folder = tmp_path / "idx"
+    folder.mkdir(mode=0o755)
+    os.chmod(folder, 0o755)
+    Store(folder / "index.db")
+    assert stat.S_IMODE(folder.stat().st_mode) == 0o700
